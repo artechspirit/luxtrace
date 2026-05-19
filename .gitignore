@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Local Environment Secrets
+.env
+.env.*
+.env*.local
+**/.env
+**/.env.*
+**/.env*.local
+
+# Whitelist safe env examples
+!.env.example
+!**/env.example
+!**/.env.example
+
+# Next.js build output
+.next/
+**/.next/
+
+# Expo build output
+.expo/
+**/dist/
+**/web-build/
+
+# Backups of git submodules
+.git_bak/
+**/.git_bak/
+**/.git_bak/**
