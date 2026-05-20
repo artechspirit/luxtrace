@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Loader from '@/components/Loader'
+import Alert from '@/components/Alert'
 import { withMinimumDelay } from '@/lib/loader-helper'
 
 // ─── DATA SEEDING ─────────────────────────────────────────────────────────────
@@ -189,6 +190,28 @@ export default function Dashboard() {
   const [isLoaderOpen, setIsLoaderOpen] = useState(false)
   const [loaderTitle, setLoaderTitle] = useState('')
   const [loaderMessage, setLoaderMessage] = useState('')
+
+  // Alert states
+  const [alertConfig, setAlertConfig] = useState<{
+    isOpen: boolean
+    type: 'success' | 'error' | 'warning' | 'info'
+    title: string
+    message: string
+  }>({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+  })
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'warning' | 'info' = 'error') => {
+    setAlertConfig({
+      isOpen: true,
+      type,
+      title,
+      message,
+    })
+  }
 
   // Load real data from REST endpoints if authenticated
   useEffect(() => {
@@ -425,7 +448,7 @@ export default function Dashboard() {
         }
       }
     } catch (err: any) {
-      alert(`Error: ${err.message || 'Payment processing failed'}`)
+      showAlert('Payment Settlement Failed', err.message || 'Payment processing failed', 'error')
     } finally {
       setIsLoaderOpen(false)
     }
@@ -453,7 +476,7 @@ export default function Dashboard() {
         }
       }
     } catch (err: any) {
-      alert(`Error: ${err.message || 'NFT Relayer failed'}`)
+      showAlert('NFT Relayer Failure', err.message || 'NFT Relayer failed', 'error')
     } finally {
       setIsLoaderOpen(false)
     }
@@ -545,7 +568,7 @@ export default function Dashboard() {
         }
       }
     } catch (err: any) {
-      alert(`Error: ${err.message || 'NFC Verification failed'}`)
+      showAlert('NFC Verification Failed', err.message || 'NFC Verification failed', 'error')
     } finally {
       setIsLoaderOpen(false)
     }
@@ -601,9 +624,9 @@ export default function Dashboard() {
             isCompleted = true
             if (batch.failed && batch.failed.length > 0) {
               const failures = batch.failed.map((f: any) => `${f.serial_number}: ${f.reason}`).join('\n')
-              alert(`Batch completed with some errors:\n${failures}`)
+              showAlert('Batch Registration Complete with Warnings', `Batch completed with some errors:\n${failures}`, 'warning')
             } else {
-              alert(`Successfully minted and registered ${batch.total_submitted} digital twins on Ethereum Sepolia!`)
+              showAlert('Batch Registration Successful', `Successfully minted and registered ${batch.total_submitted} digital twins on Ethereum Sepolia!`, 'success')
             }
           }
         }
@@ -611,7 +634,7 @@ export default function Dashboard() {
 
       await refreshData()
     } catch (err: any) {
-      alert(`Upload Error: ${err.message || 'Invalid CSV file format'}`)
+      showAlert('CSV Upload Error', err.message || 'Invalid CSV file format', 'error')
     } finally {
       setIsLoaderOpen(false)
       // Reset input
@@ -1378,6 +1401,15 @@ export default function Dashboard() {
 
       {/* ─── PREMIUM LOADER OVERLAY ───────────────────────────────────────────── */}
       <Loader isOpen={isLoaderOpen} title={loaderTitle} message={loaderMessage} />
+
+      {/* ─── PREMIUM ALERT DIALOG ──────────────────────────────────────────────── */}
+      <Alert 
+        isOpen={alertConfig.isOpen}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }
