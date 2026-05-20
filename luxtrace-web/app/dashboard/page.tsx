@@ -217,36 +217,36 @@ export default function Dashboard() {
         const prodRes = await fetch('/api/products', {
           headers: { 'Authorization': `Bearer ${token}` }
         })
+        if (!prodRes.ok) throw new Error('Products request failed')
         const prodData = await prodRes.json()
-        if (prodRes.ok && prodData.success && Array.isArray(prodData.data.items)) {
-          const mappedProducts = await Promise.all(prodData.data.items.map(async (p: any) => {
-            let timeline: any[] = []
-            try {
-              const provRes = await fetch(`/api/provenance/${p.product_id}`)
-              const provData = await provRes.json()
-              if (provRes.ok && provData.success) {
-                timeline = provData.data.timeline || []
-              }
-            } catch (e) {}
-            return {
-              product_id: p.product_id,
-              serial_number: p.serial_number,
-              brand: p.brand,
-              name: p.name,
-              status: p.status,
-              nft_token_id: p.nft_token_id || '',
-              wallet: p.current_owner_id || '0xBrand...Custody',
-              timeline
+        if (!prodData.success || !Array.isArray(prodData.data.items)) {
+          throw new Error('Products data format invalid')
+        }
+
+        const mappedProducts = await Promise.all(prodData.data.items.map(async (p: any) => {
+          let timeline: any[] = []
+          try {
+            const provRes = await fetch(`/api/provenance/${p.product_id}`)
+            const provData = await provRes.json()
+            if (provRes.ok && provData.success) {
+              timeline = provData.data.timeline || []
             }
-          }))
-          setProducts(mappedProducts)
-          if (mappedProducts.length > 0) {
-            setSelectedProduct(mappedProducts[0])
-          } else {
-            setSelectedProduct(null)
+          } catch (e) {}
+          return {
+            product_id: p.product_id,
+            serial_number: p.serial_number,
+            brand: p.brand,
+            name: p.name,
+            status: p.status,
+            nft_token_id: p.nft_token_id || '',
+            wallet: p.current_owner_id || '0xBrand...Custody',
+            timeline
           }
+        }))
+        setProducts(mappedProducts)
+        if (mappedProducts.length > 0) {
+          setSelectedProduct(mappedProducts[0])
         } else {
-          setProducts([])
           setSelectedProduct(null)
         }
 
@@ -254,28 +254,37 @@ export default function Dashboard() {
         const txRes = await fetch('/api/transactions', {
           headers: { 'Authorization': `Bearer ${token}` }
         })
+        if (!txRes.ok) throw new Error('Transactions request failed')
         const txData = await txRes.json()
-        if (txRes.ok && txData.success && Array.isArray(txData.data)) {
-          const mappedTxs = txData.data.map((t: any) => ({
-            id: t.transaction_id,
-            product_id: t.product_id,
-            product: t.product_name || `Product ${t.product_id.slice(0, 8)}`,
-            serial: t.serial_number || 'N/A',
-            type: t.type,
-            amount: `Rp ${t.amount_idr.toLocaleString('id-ID')}`,
-            amountNum: t.amount_idr,
-            status: t.status,
-            date: new Date(t.created_at).toLocaleDateString()
-          }))
-          setTransactions(mappedTxs)
-        } else {
-          setTransactions([])
+        if (!txData.success || !Array.isArray(txData.data)) {
+          throw new Error('Transactions data format invalid')
         }
+
+        const mappedTxs = txData.data.map((t: any) => ({
+          id: t.transaction_id,
+          product_id: t.product_id,
+          product: t.product_name || `Product ${t.product_id.slice(0, 8)}`,
+          serial: t.serial_number || 'N/A',
+          type: t.type,
+          amount: `Rp ${t.amount_idr.toLocaleString('id-ID')}`,
+          amountNum: t.amount_idr,
+          status: t.status,
+          date: new Date(t.created_at).toLocaleDateString()
+        }))
+        setTransactions(mappedTxs)
       } catch (err) {
-        console.warn('[Dashboard] Failed to fetch real data.', err)
-        setProducts([])
-        setTransactions([])
-        setSelectedProduct(null)
+        console.warn('[Dashboard] Failed to fetch real data, falling back to mock seed data.', err)
+        const seededTxs = INITIAL_TRANSACTIONS.map((tx: any) => ({
+          ...tx,
+          amountNum: parseInt(tx.amount.replace(/[^0-9]/g, ''), 10)
+        }))
+        setProducts(INITIAL_PRODUCTS)
+        setTransactions(seededTxs)
+        if (INITIAL_PRODUCTS.length > 0) {
+          setSelectedProduct(INITIAL_PRODUCTS[0])
+        } else {
+          setSelectedProduct(null)
+        }
       }
     }
 
