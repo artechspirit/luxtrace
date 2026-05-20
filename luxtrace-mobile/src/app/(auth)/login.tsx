@@ -74,45 +74,11 @@ export default function LoginScreen() {
       }
 
       const authUrl = result.data.url
-      const browserResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl)
-
-      if (browserResult.type === 'success' && browserResult.url) {
-        const parsedUrl = Linking.parse(browserResult.url)
-        const code = parsedUrl.queryParams?.code as string | undefined
-
-        if (code) {
-          // Trigger the 12.5s Luxury Loader immediately
-          setIsLuxuryLoading(true)
-          setLoaderFinished(false)
-          setPendingSession(null)
-
-          const exchangeResponse = await fetch(`${API_BASE_URL}/auth/oauth/google`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code }),
-          })
-
-          const exchangeResult = await exchangeResponse.json()
-
-          if (!exchangeResponse.ok || !exchangeResult.success) {
-            throw new Error(exchangeResult.message || 'Google OAuth exchange failed')
-          }
-
-          const { access_token, user_id, email: userEmail, full_name, avatar_url, wallet_address, role } = exchangeResult.data
-          const userData = { user_id, email: userEmail, full_name, role, wallet_address, avatar_url }
-
-          setPendingSession({ token: access_token, user: userData })
-        } else {
-          throw new Error('Google OAuth callback did not contain authentication code.')
-        }
-      } else if (browserResult.type === 'cancel') {
-        console.log('[Google Login] User cancelled session.')
-      } else {
-        throw new Error('Google OAuth flow aborted or failed.')
-      }
+      
+      // Open browser session. Callback will be intercepted and navigated to /auth-callback
+      await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl)
     } catch (err: any) {
       console.error('[Google Login Error]', err)
-      setIsLuxuryLoading(false)
       useAuthStore.setState({ error: err.message || 'Failed to authenticate with Google' })
       showAlert('Authentication Failed', err.message || 'Failed to authenticate with Google.')
     }
