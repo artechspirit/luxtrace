@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Profile } from '@/types'
+import { authService } from '@/services/auth.service'
 
 const supabaseUrl = process.env.SUPABASE_URL!
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!
@@ -26,11 +27,21 @@ export async function getAuthenticatedUser(
   const { data: { user }, error } = await client.auth.getUser()
   if (error || !user) return null
 
-  const { data: profile } = await client
+  let { data: profile } = await client
     .from('profiles')
     .select('*')
     .eq('user_id', user.id)
     .single()
+
+  if (!profile) {
+    try {
+      console.log(`[getAuthenticatedUser] Profile missing for user ${user.id}. Provisioning on-the-fly...`)
+      profile = (await authService.getMe(user.id)) as any
+    } catch (e) {
+      console.error('[getAuthenticatedUser] Failed to provision profile:', e)
+      return null
+    }
+  }
 
   return profile as Profile | null
 }
