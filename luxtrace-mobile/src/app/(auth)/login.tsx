@@ -75,8 +75,33 @@ export default function LoginScreen() {
 
       const authUrl = result.data.url
       
-      // Open browser session. Callback will be intercepted and navigated to /auth-callback
-      await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl)
+      console.log('[Google Login] Opening auth browser...')
+      const browserResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl)
+      console.log('[Google Login] Browser result type:', browserResult.type)
+
+      if (browserResult.type === 'success' && browserResult.url) {
+        console.log('[Google Login] Browser returned URL:', browserResult.url)
+        
+        // Extract code using robust regex
+        const regex = /[?&#]code=([^&#]*)/
+        const match = browserResult.url.match(regex)
+        const code = match ? decodeURIComponent(match[1]) : undefined
+
+        console.log('[Google Login] Extracted code parameter:', code)
+
+        if (code) {
+          router.replace({
+            pathname: '/auth-callback',
+            params: { code }
+          })
+        } else {
+          throw new Error('Google OAuth callback did not contain authentication code.')
+        }
+      } else if (browserResult.type === 'cancel') {
+        console.log('[Google Login] User cancelled session.')
+      } else {
+        throw new Error('Google OAuth flow aborted or failed.')
+      }
     } catch (err: any) {
       console.error('[Google Login Error]', err)
       useAuthStore.setState({ error: err.message || 'Failed to authenticate with Google' })

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import * as Linking from 'expo-linking'
 import { useAuthStore } from '@/stores/authStore'
 import { useAlertStore } from '@/stores/alertStore'
@@ -17,6 +17,8 @@ const ONBOARDING_STEPS = [
 
 export default function AuthCallbackScreen() {
   const router = useRouter()
+  const params = useLocalSearchParams()
+  const routeCode = params.code as string | undefined
   const url = Linking.useURL()
   const { setSession } = useAuthStore()
   const { showAlert } = useAlertStore()
@@ -40,36 +42,32 @@ export default function AuthCallbackScreen() {
   }, [loaderFinished, pendingSession])
 
   useEffect(() => {
-    console.log('[AuthCallback] Hook URL changed:', url)
-    if (!url) return
+    console.log('[AuthCallback] Checking parameters. Route code:', routeCode, 'URL:', url)
+    
+    // Determine the code from route params or URL
+    let code = routeCode
 
-    const parsed = Linking.parse(url)
-    console.log('[AuthCallback] Parsed URL object:', parsed)
-
-    // Robust parameter extractor for both query (?) and fragment (#)
-    const getParam = (name: string) => {
-      if (parsed.queryParams && parsed.queryParams[name]) {
-        return parsed.queryParams[name] as string
+    if (!code && url) {
+      const parsed = Linking.parse(url)
+      if (parsed.queryParams && parsed.queryParams.code) {
+        code = parsed.queryParams.code as string
+      } else {
+        const regex = /[?&#]code=([^&#]*)/
+        const match = url.match(regex)
+        if (match) {
+          code = decodeURIComponent(match[1])
+        }
       }
-      const regex = new RegExp(`[?&#]${name}=([^&#]*)`)
-      const match = url.match(regex)
-      return match ? decodeURIComponent(match[1]) : undefined
     }
 
-    const code = getParam('code')
-    console.log('[AuthCallback] Extracted code:', code)
+    console.log('[AuthCallback] Resolved code:', code)
 
     if (!code) {
-      console.log('[AuthCallback] No code found in URL yet. Checking access_token fallback...')
-      const accessToken = getParam('access_token')
-      if (accessToken) {
-        console.log('[AuthCallback] Implicit access token found but code flow is required for profile sync. Returning to login.')
-      }
-      
-      // Delay redirect slightly to ensure any background load has time to settle
+      console.log('[AuthCallback] No code resolved yet. Setting fallback timeout to return to login...')
       const timeout = setTimeout(() => {
+        console.log('[AuthCallback] Code resolution timed out. Redirecting back to login.')
         router.replace('/(auth)/login')
-      }, 1000)
+      }, 5000)
       return () => clearTimeout(timeout)
     }
 
@@ -103,7 +101,7 @@ export default function AuthCallbackScreen() {
     }
 
     exchangeCode()
-  }, [url])
+  }, [routeCode, url])
 
   return (
     <View style={styles.container}>
