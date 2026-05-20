@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import * as Linking from 'expo-linking'
@@ -27,6 +27,8 @@ export default function AuthCallbackScreen() {
   const [isLuxuryLoading, setIsLuxuryLoading] = useState(true)
   const [loaderFinished, setLoaderFinished] = useState(false)
   const [pendingSession, setPendingSession] = useState<{ token: string; user: any } | null>(null)
+  
+  const authenticatingRef = useRef(false)
 
   // Sync animation finish with login resolution to avoid premature routing
   useEffect(() => {
@@ -69,6 +71,13 @@ export default function AuthCallbackScreen() {
       }, 5000)
       return () => clearTimeout(timeout)
     }
+
+    if (authenticatingRef.current) {
+      console.log('[AuthCallback] Authentication already in progress. Ignoring duplicate trigger.')
+      return
+    }
+
+    authenticatingRef.current = true
 
     const authenticate = async () => {
       try {
