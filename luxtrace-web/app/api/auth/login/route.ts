@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
         role: result.profile.role,
         access_token: result.access_token,
         refresh_token: result.refresh_token,
+        is_new_user: result.isNewUser,
       })
     }
 
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
       role: result.profile.role,
       access_token: result.access_token,
       refresh_token: result.refresh_token,
+      is_new_user: false,
     })
   } catch (error: unknown) {
     const e = error as { code?: string; message?: string }

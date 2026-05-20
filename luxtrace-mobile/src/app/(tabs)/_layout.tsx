@@ -1,7 +1,8 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform, Image, StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -11,7 +12,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#00FFB2',
-        tabBarInactiveTintColor: '#718096',
+        tabBarInactiveTintColor: '#4a5568',
         tabBarStyle: [
           styles.tabBar,
           {
@@ -19,7 +20,7 @@ export default function TabsLayout() {
               ? 50 + (insets.bottom > 0 ? insets.bottom : 12)
               : 60 + (insets.bottom > 0 ? insets.bottom : 8),
             paddingBottom: insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 12 : 8),
-          }
+          },
         ],
         tabBarLabelStyle: styles.tabBarLabel,
       }}
@@ -28,10 +29,11 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'ESCROWS',
-          tabBarIcon: ({ color }) => (
-            <Image
-              source={require('@/assets/images/tabIcons/home.png')}
-              style={[styles.tabIcon, { tintColor: color }]}
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'shield-checkmark' : 'shield-checkmark-outline'}
+              size={22}
+              color={color}
             />
           ),
         }}
@@ -40,10 +42,11 @@ export default function TabsLayout() {
         name="explore"
         options={{
           title: 'MY VAULT',
-          tabBarIcon: ({ color }) => (
-            <Image
-              source={require('@/assets/images/tabIcons/explore.png')}
-              style={[styles.tabIcon, { tintColor: color }]}
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? 'diamond' : 'diamond-outline'}
+              size={22}
+              color={color}
             />
           ),
         }}
@@ -56,18 +59,13 @@ const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: '#0A0A0A',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
-    paddingTop: 12,
+    borderTopColor: 'rgba(0, 255, 178, 0.08)',
+    paddingTop: 10,
   },
   tabBarLabel: {
     fontSize: 9,
     fontWeight: 'bold',
     letterSpacing: 1.5,
-    marginTop: 4,
-  },
-  tabIcon: {
-    width: 22,
-    height: 22,
-    resizeMode: 'contain',
+    marginTop: 2,
   },
 });

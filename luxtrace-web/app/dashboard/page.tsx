@@ -631,7 +631,7 @@ export default function Dashboard() {
     <div className="flex min-h-screen bg-[#0A0A0A] font-sans antialiased text-[#ededed]">
       
       {/* ─── SIDEBAR ───────────────────────────────────────────────────────────── */}
-      <aside className="w-64 border-r border-[#00FFB2]/8 bg-black/40 backdrop-blur-md flex flex-col justify-between p-6">
+      <aside className="fixed inset-y-0 left-0 w-64 h-screen border-r border-[#00FFB2]/8 bg-black/40 backdrop-blur-md flex flex-col justify-between p-6 z-30 overflow-y-auto">
         <div>
           {/* Logo */}
           <div className="flex items-center gap-3 mb-10 px-2">
@@ -728,7 +728,7 @@ export default function Dashboard() {
       </aside>
 
       {/* ─── MAIN CONTENT ──────────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto px-10 py-8 space-y-8">
+      <main className="flex-1 ml-64 overflow-y-auto px-10 py-8 space-y-8">
         
         {/* Header */}
         <div className="flex justify-between items-center border-b border-white/5 pb-6">
@@ -759,29 +759,7 @@ export default function Dashboard() {
               </svg>
             </div>
 
-            {/* Simulated Action Triggers */}
-            {activeTab === 'dashboard' && (
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => handlePaymentSuccess()}
-                  className="px-3 py-2 bg-[#0B0F0E] hover:bg-[#0F2A25]/50 border border-zinc-800 hover:border-[#00FFB2]/30 rounded-lg text-xs font-mono text-zinc-400 hover:text-[#00FFB2] transition duration-200 cursor-pointer"
-                >
-                  Simulate Payment Success
-                </button>
-                <button 
-                  onClick={() => handleNftTransfer()}
-                  className="px-3 py-2 bg-[#0B0F0E] hover:bg-[#0F2A25]/50 border border-zinc-800 hover:border-[#00FFB2]/30 rounded-lg text-xs font-mono text-zinc-400 hover:text-[#00FFB2] transition duration-200 cursor-pointer"
-                >
-                  Simulate NFT Transfer
-                </button>
-                <button 
-                  onClick={() => handleNfcVerification()}
-                  className="px-3 py-2 bg-[#0B0F0E] hover:bg-[#0F2A25]/50 border border-zinc-800 hover:border-[#00FFB2]/30 rounded-lg text-xs font-mono text-zinc-400 hover:text-[#00FFB2] transition duration-200 cursor-pointer"
-                >
-                  Simulate NFC Verify
-                </button>
-              </div>
-            )}
+
 
             <button 
               onClick={() => fileInputRef.current?.click()}

@@ -27,14 +27,14 @@ async function getOrCreateProfile(
   fullName: string | null,
   avatarUrl: string | null,
   defaultRole: UserRole = 'CONSUMER'
-): Promise<Profile> {
+): Promise<{ profile: Profile; isNewUser: boolean }> {
   const existing = await profileRepository.findByUserId(userId)
-  if (existing) return existing
+  if (existing) return { profile: existing, isNewUser: false }
 
   // Synchronous — no network call, no rollback needed
   const walletAddress = generateWallet(userId)
 
-  return profileRepository.create({
+  const profile = await profileRepository.create({
     user_id: userId,
     email,
     wallet_address: walletAddress,
@@ -42,6 +42,8 @@ async function getOrCreateProfile(
     full_name: fullName,
     avatar_url: avatarUrl,
   })
+
+  return { profile, isNewUser: true }
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -76,7 +78,7 @@ export const authService = {
     const userId = authData.user.id
  
     // 2. Create profile + wallet (rolls back auth user on wallet failure)
-    const profile = await getOrCreateProfile(userId, email, fullName ?? null, null, role || 'CONSUMER')
+    const { profile } = await getOrCreateProfile(userId, email, fullName ?? null, null, role || 'CONSUMER')
  
     // 3. Sign in to get JWT session
     const { data: session, error: sessionError } = await supabase.auth.signInWithPassword({
@@ -130,6 +132,7 @@ export const authService = {
    */
   async handleOAuthCallback(code: string): Promise<{
     profile: Profile
+    isNewUser: boolean
     access_token: string
     refresh_token: string
   }> {
@@ -145,10 +148,11 @@ export const authService = {
     const avatarUrl = (user.user_metadata?.avatar_url as string) ?? null
 
     // getOrCreateProfile is idempotent — safe to call on every OAuth login
-    const profile = await getOrCreateProfile(user.id, email, fullName, avatarUrl, 'CONSUMER')
+    const { profile, isNewUser } = await getOrCreateProfile(user.id, email, fullName, avatarUrl, 'CONSUMER')
 
     return {
       profile,
+      isNewUser,
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
     }
@@ -206,7 +210,8 @@ export const authService = {
       const fullName = (user.user_metadata?.full_name as string) ?? null
       const avatarUrl = (user.user_metadata?.avatar_url as string) ?? null
       
-      profile = await getOrCreateProfile(userId, email, fullName, avatarUrl, 'CONSUMER')
+      const result = await getOrCreateProfile(userId, email, fullName, avatarUrl, 'CONSUMER')
+      profile = result.profile
     }
     return profile
   },

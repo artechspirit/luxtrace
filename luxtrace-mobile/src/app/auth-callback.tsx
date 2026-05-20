@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, View, ActivityIndicator } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import * as Linking from 'expo-linking'
 import { useAuthStore } from '@/stores/authStore'
@@ -24,7 +24,8 @@ export default function AuthCallbackScreen() {
   const { setSession } = useAuthStore()
   const { showAlert } = useAlertStore()
 
-  const [isLuxuryLoading, setIsLuxuryLoading] = useState(true)
+  const [isLuxuryLoading, setIsLuxuryLoading] = useState(false)
+  const [isApiLoading, setIsApiLoading] = useState(true)
   const [loaderFinished, setLoaderFinished] = useState(false)
   const [pendingSession, setPendingSession] = useState<{ token: string; user: any } | null>(null)
   
@@ -96,11 +97,20 @@ export default function AuthCallbackScreen() {
             throw new Error(result.message || 'Google OAuth exchange failed')
           }
 
-          const { access_token, user_id, email, full_name, avatar_url, wallet_address, role } = result.data
+          const { access_token, user_id, email, full_name, avatar_url, wallet_address, role, is_new_user } = result.data
           const userData = { user_id, email, full_name, role, wallet_address, avatar_url }
 
-          console.log('[AuthCallback] Exchange success, userData:', userData)
-          setPendingSession({ token: access_token, user: userData })
+          console.log('[AuthCallback] Exchange success, userData:', userData, 'is_new_user:', is_new_user)
+          
+          if (is_new_user) {
+            setIsApiLoading(false)
+            setIsLuxuryLoading(true)
+            setPendingSession({ token: access_token, user: userData })
+          } else {
+            setIsApiLoading(false)
+            await setSession(access_token, userData)
+            router.replace('/')
+          }
         } else if (accessToken) {
           console.log('[AuthCallback] Validating implicit access token with backend...')
           const response = await fetch(`${API_BASE_URL}/auth/me`, {
@@ -117,10 +127,13 @@ export default function AuthCallbackScreen() {
           }
 
           console.log('[AuthCallback] Profile fetch success, userData:', result.data)
-          setPendingSession({ token: accessToken, user: result.data })
+          setIsApiLoading(false)
+          await setSession(accessToken, result.data)
+          router.replace('/')
         }
       } catch (err: any) {
         console.error('[OAuth Callback Error]', err)
+        setIsApiLoading(false)
         setIsLuxuryLoading(false)
         showAlert('Authentication Failed', err.message || 'Failed to complete Google login.')
         router.replace('/(auth)/login')
@@ -129,6 +142,14 @@ export default function AuthCallbackScreen() {
 
     authenticate()
   }, [routeCode, routeAccessToken, url])
+
+  if (isApiLoading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#00FFB2" />
+      </View>
+    )
+  }
 
   return (
     <View style={styles.container}>

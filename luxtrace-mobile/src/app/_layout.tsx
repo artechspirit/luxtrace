@@ -46,13 +46,37 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const isAuthCallback = segments[0] === 'auth-callback';
+    const inOperatorGroup = segments[0] === '(operator)';
+    const inConsumerGroup = segments[0] === '(tabs)';
 
     if (!isAuthenticated && !inAuthGroup && !isAuthCallback) {
-      // Redirect to login if not authenticated and not on callback page
+      // Not logged in → force login
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
-      // Redirect to home if authenticated
-      router.replace('/');
+      // Logged in but on auth screen → route by role
+      const role = (useAuthStore.getState().user?.role) ?? 'CONSUMER';
+      if (role === 'OPERATOR' || role === 'ADMIN') {
+        router.replace('/(operator)');
+      } else {
+        router.replace('/');
+      }
+    } else if (isAuthenticated && !inAuthGroup && !isAuthCallback) {
+      // Logged in — enforce role-based group access
+      const role = (useAuthStore.getState().user?.role) ?? 'CONSUMER';
+      const isOperatorRole = role === 'OPERATOR' || role === 'ADMIN';
+
+      if (isOperatorRole && inConsumerGroup) {
+        // Operator accidentally in consumer group → redirect to operator
+        router.replace('/(operator)');
+      } else if (!isOperatorRole && inOperatorGroup) {
+        // Consumer accidentally in operator group → redirect to consumer
+        router.replace('/');
+      } else if (isOperatorRole && !inOperatorGroup && !isAuthCallback) {
+        // Operator on root or unknown route → go to operator dashboard
+        if (segments[0] === undefined || segments[0] === '') {
+          router.replace('/(operator)');
+        }
+      }
     }
   }, [isAuthenticated, segments, isLoading, fontsLoaded]);
 
@@ -72,6 +96,7 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)/login" options={{ gestureEnabled: false }} />
         <Stack.Screen name="auth-callback" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(operator)" />
         <Stack.Screen name="(consumer)/scan" options={{ presentation: 'modal' }} />
         <Stack.Screen name="products/[id]" />
       </Stack>

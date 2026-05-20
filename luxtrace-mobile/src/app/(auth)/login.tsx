@@ -136,9 +136,6 @@ export default function LoginScreen() {
     }
 
     setIsSubmitting(true)
-    setIsLuxuryLoading(true)
-    setLoaderFinished(false)
-    setPendingSession(null)
     clearError()
 
     try {
@@ -157,9 +154,8 @@ export default function LoginScreen() {
       const { access_token, user_id, full_name, avatar_url, wallet_address, role } = result.data
       const userData = { user_id, email: email.trim(), full_name, role, wallet_address, avatar_url }
 
-      setPendingSession({ token: access_token, user: userData })
+      await setSession(access_token, userData)
     } catch (err: any) {
-      setIsLuxuryLoading(false)
       useAuthStore.setState({ error: err.message || 'Invalid email or password.' })
       showAlert('Access Denied', err.message || 'Invalid email or password.')
     } finally {

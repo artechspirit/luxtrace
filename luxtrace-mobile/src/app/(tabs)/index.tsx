@@ -16,6 +16,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useAlertStore } from '@/stores/alertStore'
 import { API_BASE_URL } from '@/constants/config'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import Ionicons from '@expo/vector-icons/Ionicons'
 
 interface Product {
   name: string
@@ -219,7 +220,12 @@ export default function HomeScreen() {
           <Text className="text-white text-[20px] font-jakarta-bold tracking-[0.5px]">{user?.full_name?.toUpperCase() || 'USER'}</Text>
           <Text className="text-[#a0aec0] text-[11px] font-jakarta-semibold tracking-[0.5px] mt-1">ROLE: {user?.role}</Text>
         </View>
-        <TouchableOpacity className="border border-[#ef4444] px-3 py-1.5 rounded-lg" onPress={logout}>
+        <TouchableOpacity
+          className="border border-[#ef4444]/50 px-3 py-1.5 rounded-lg flex-row items-center gap-1.5"
+          onPress={logout}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="log-out-outline" size={13} color="#ef4444" />
           <Text className="text-[#ef4444] text-[10px] font-jakarta-bold tracking-[1px]">LOG OUT</Text>
         </TouchableOpacity>
       </View>
@@ -285,11 +291,11 @@ export default function HomeScreen() {
 
       {/* Floating Action Button (FAB) to Scan QR */}
       <TouchableOpacity
-        className="absolute bottom-6 right-6 w-[120px] h-[50px] bg-[#00FFB2] rounded-full items-center justify-center shadow-lg shadow-[#00FFB2]/30"
+        className="absolute bottom-6 right-6 w-[52px] h-[52px] bg-[#00FFB2] rounded-full items-center justify-center shadow-lg shadow-[#00FFB2]/30"
         onPress={() => router.push('/scan')}
         activeOpacity={0.8}
       >
-        <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[2px]">SCAN QR</Text>
+        <Ionicons name="qr-code-outline" size={24} color="#0A0A0A" />
       </TouchableOpacity>
 
       {/* Custodial Wallet Detail Modal */}

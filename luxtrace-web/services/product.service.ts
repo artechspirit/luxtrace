@@ -8,7 +8,8 @@ import { v4 as uuidv4 } from 'uuid'
 
 export const productService = {
   async getAll(filters: { status?: ProductStatus; page: number; limit: number }) {
-    return productRepository.findAll(filters)
+    const result = await productRepository.findAll(filters)
+    return { data: result.items, total: result.total }
   },
 
   async getById(productId: string): Promise<Product> {

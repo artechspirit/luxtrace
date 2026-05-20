@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     if (user.role === 'ADMIN' || user.role === 'OPERATOR') {
       const result = await productService.getAll({ status, page, limit })
       return ok({
-        items: result.items,
+        items: result.data,
         pagination: {
           page,
           limit,

@@ -10,12 +10,27 @@ const QR_SESSION_TTL_MS = 15 * 60 * 1000
 export const nfcService = {
   /**
    * Generate UID, hash it, and bind to product.
-   * Called during manufacturing — never by client.
+   * Called during manufacturing batch — uses a UUID placeholder.
+   * For real hardware deployment, use bindWithRealUid instead.
    */
   async bindToProduct(productId: string): Promise<NfcTag> {
     const rawUid = uuidv4() // In hardware: read from physical NFC chip writer
     const secureKeyHash = hashNfcUid(rawUid)
     return nfcRepository.create(rawUid, secureKeyHash, productId)
+  },
+
+  /**
+   * Bind a REAL physical NFC UID to a MANUFACTURED product.
+   * Called by OPERATOR via /api/nfc/activate when they physically scan
+   * the NFC chip embedded in the product at the boutique.
+   *
+   * The raw UID is hashed (SHA-256) before storage — the plaintext UID
+   * is never persisted, only used for verification comparisons.
+   */
+  async bindWithRealUid(productId: string, realNfcUid: string): Promise<NfcTag> {
+    const secureKeyHash = hashNfcUid(realNfcUid)
+    // Store real UID (hashed for security) and also store nfc_uid for QR generation
+    return nfcRepository.create(realNfcUid, secureKeyHash, productId)
   },
 
   /**

@@ -17,6 +17,7 @@ import { API_BASE_URL } from '@/constants/config'
 import { LuxuryLoader } from '@/components/ui/LuxuryLoader'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import NfcManager, { NfcTech } from 'react-native-nfc-manager'
+import Ionicons from '@expo/vector-icons/Ionicons'
 
 export default function ScanScreen() {
   const router = useRouter()
@@ -304,7 +305,7 @@ export default function ScanScreen() {
               
               {/* Native NFC Scan Trigger */}
               <TouchableOpacity
-                className="bg-[#0d1614] border border-[#00FFB2]/20 rounded-xl h-12 items-center justify-center mb-3 flex-row shadow-sm shadow-[#00FFB2]/5"
+                className="bg-[#0d1614] border border-[#00FFB2]/20 rounded-xl h-12 items-center justify-center mb-3 flex-row gap-2 shadow-sm shadow-[#00FFB2]/5"
                 onPress={handleNativeNfcScan}
                 disabled={isNfcScanning}
                 activeOpacity={0.8}
@@ -312,9 +313,12 @@ export default function ScanScreen() {
                 {isNfcScanning ? (
                   <ActivityIndicator color="#00FFB2" size="small" />
                 ) : (
-                  <Text className="text-[#00FFB2] text-xs font-jakarta-bold tracking-[1.5px]">
-                    TAP PHYSICAL NFC TAG TO SCAN
-                  </Text>
+                  <>
+                    <Ionicons name="radio" size={16} color="#00FFB2" />
+                    <Text className="text-[#00FFB2] text-xs font-jakarta-bold tracking-[1.5px]">
+                      TAP PHYSICAL NFC TAG TO SCAN
+                    </Text>
+                  </>
                 )}
               </TouchableOpacity>
 
