@@ -82,20 +82,29 @@ export default function LoginScreen() {
       if (browserResult.type === 'success' && browserResult.url) {
         console.log('[Google Login] Browser returned URL:', browserResult.url)
         
-        // Extract code using robust regex
-        const regex = /[?&#]code=([^&#]*)/
-        const match = browserResult.url.match(regex)
-        const code = match ? decodeURIComponent(match[1]) : undefined
+        const getParam = (url: string, name: string) => {
+          const regex = new RegExp(`[?&#]${name}=([^&#]*)`)
+          const match = url.match(regex)
+          return match ? decodeURIComponent(match[1]) : undefined
+        }
 
-        console.log('[Google Login] Extracted code parameter:', code)
+        const code = getParam(browserResult.url, 'code')
+        const accessToken = getParam(browserResult.url, 'access_token')
+
+        console.log('[Google Login] Extracted code:', code, 'accessToken:', accessToken ? 'found' : 'missing')
 
         if (code) {
           router.replace({
             pathname: '/auth-callback',
             params: { code }
           })
+        } else if (accessToken) {
+          router.replace({
+            pathname: '/auth-callback',
+            params: { accessToken }
+          })
         } else {
-          throw new Error('Google OAuth callback did not contain authentication code.')
+          throw new Error('Google OAuth callback did not contain authentication code or access token.')
         }
       } else if (browserResult.type === 'cancel') {
         console.log('[Google Login] User cancelled session.')

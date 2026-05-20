@@ -19,6 +19,7 @@ export default function AuthCallbackScreen() {
   const router = useRouter()
   const params = useLocalSearchParams()
   const routeCode = params.code as string | undefined
+  const routeAccessToken = params.accessToken as string | undefined
   const url = Linking.useURL()
   const { setSession } = useAuthStore()
   const { showAlert } = useAlertStore()
@@ -42,56 +43,73 @@ export default function AuthCallbackScreen() {
   }, [loaderFinished, pendingSession])
 
   useEffect(() => {
-    console.log('[AuthCallback] Checking parameters. Route code:', routeCode, 'URL:', url)
+    console.log('[AuthCallback] Checking parameters. Route code:', routeCode, 'routeAccessToken:', routeAccessToken ? 'present' : 'missing', 'URL:', url)
     
-    // Determine the code from route params or URL
+    // Determine the code/token from route params or URL
     let code = routeCode
+    let accessToken = routeAccessToken
 
-    if (!code && url) {
-      const parsed = Linking.parse(url)
-      if (parsed.queryParams && parsed.queryParams.code) {
-        code = parsed.queryParams.code as string
-      } else {
-        const regex = /[?&#]code=([^&#]*)/
+    if (!code && !accessToken && url) {
+      const getParam = (name: string) => {
+        const regex = new RegExp(`[?&#]${name}=([^&#]*)`)
         const match = url.match(regex)
-        if (match) {
-          code = decodeURIComponent(match[1])
-        }
+        return match ? decodeURIComponent(match[1]) : undefined
       }
+      code = getParam('code')
+      accessToken = getParam('access_token')
     }
 
-    console.log('[AuthCallback] Resolved code:', code)
+    console.log('[AuthCallback] Resolved code:', code, 'accessToken:', accessToken ? 'present' : 'missing')
 
-    if (!code) {
-      console.log('[AuthCallback] No code resolved yet. Setting fallback timeout to return to login...')
+    if (!code && !accessToken) {
+      console.log('[AuthCallback] No credentials resolved yet. Setting fallback timeout to return to login...')
       const timeout = setTimeout(() => {
-        console.log('[AuthCallback] Code resolution timed out. Redirecting back to login.')
+        console.log('[AuthCallback] Code/Token resolution timed out. Redirecting back to login.')
         router.replace('/(auth)/login')
       }, 5000)
       return () => clearTimeout(timeout)
     }
 
-    const exchangeCode = async () => {
+    const authenticate = async () => {
       try {
-        console.log('[AuthCallback] Exchanging code with API base:', API_BASE_URL)
-        const response = await fetch(`${API_BASE_URL}/auth/oauth/google`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
-        })
+        if (code) {
+          console.log('[AuthCallback] Exchanging code with API base:', API_BASE_URL)
+          const response = await fetch(`${API_BASE_URL}/auth/oauth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+          })
 
-        const result = await response.json()
-        console.log('[AuthCallback] API response status:', response.status, 'success:', result.success)
+          const result = await response.json()
+          console.log('[AuthCallback] API response status:', response.status, 'success:', result.success)
 
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || 'Google OAuth exchange failed')
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Google OAuth exchange failed')
+          }
+
+          const { access_token, user_id, email, full_name, avatar_url, wallet_address, role } = result.data
+          const userData = { user_id, email, full_name, role, wallet_address, avatar_url }
+
+          console.log('[AuthCallback] Exchange success, userData:', userData)
+          setPendingSession({ token: access_token, user: userData })
+        } else if (accessToken) {
+          console.log('[AuthCallback] Validating implicit access token with backend...')
+          const response = await fetch(`${API_BASE_URL}/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          })
+
+          const result = await response.json()
+          console.log('[AuthCallback] API /auth/me status:', response.status, 'success:', result.success)
+
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Failed to fetch user profile with access token')
+          }
+
+          console.log('[AuthCallback] Profile fetch success, userData:', result.data)
+          setPendingSession({ token: accessToken, user: result.data })
         }
-
-        const { access_token, user_id, email, full_name, avatar_url, wallet_address, role } = result.data
-        const userData = { user_id, email, full_name, role, wallet_address, avatar_url }
-
-        console.log('[AuthCallback] Exchange success, userData:', userData)
-        setPendingSession({ token: access_token, user: userData })
       } catch (err: any) {
         console.error('[OAuth Callback Error]', err)
         setIsLuxuryLoading(false)
@@ -100,8 +118,8 @@ export default function AuthCallbackScreen() {
       }
     }
 
-    exchangeCode()
-  }, [routeCode, url])
+    authenticate()
+  }, [routeCode, routeAccessToken, url])
 
   return (
     <View style={styles.container}>

@@ -191,11 +191,22 @@ export const authService = {
 
   /**
    * Get profile by userId (for /auth/me endpoint).
+   * Generates profile + custodial wallet on the fly if not found.
    */
   async getMe(userId: string): Promise<Profile> {
-    const profile = await profileRepository.findByUserId(userId)
+    let profile = await profileRepository.findByUserId(userId)
     if (!profile) {
-      throw Object.assign(new Error('Profile not found'), { code: 'NOT_FOUND' })
+      console.log(`[getMe] Profile not found for userId: ${userId}. Attempting on-the-fly generation...`)
+      const { data, error } = await supabase.auth.admin.getUserById(userId)
+      if (error || !data?.user) {
+        throw Object.assign(new Error('Profile not found'), { code: 'NOT_FOUND' })
+      }
+      const user = data.user
+      const email = user.email ?? ''
+      const fullName = (user.user_metadata?.full_name as string) ?? null
+      const avatarUrl = (user.user_metadata?.avatar_url as string) ?? null
+      
+      profile = await getOrCreateProfile(userId, email, fullName, avatarUrl, 'CONSUMER')
     }
     return profile
   },
