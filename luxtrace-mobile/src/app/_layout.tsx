@@ -45,9 +45,10 @@ export default function RootLayout() {
     if (isLoading || !fontsLoaded) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const isAuthCallback = segments[0] === 'auth-callback';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      // Redirect to login if not authenticated
+    if (!isAuthenticated && !inAuthGroup && !isAuthCallback) {
+      // Redirect to login if not authenticated and not on callback page
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
       // Redirect to home if authenticated
@@ -69,6 +70,7 @@ export default function RootLayout() {
       <GlobalAlert />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)/login" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="auth-callback" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(consumer)/scan" options={{ presentation: 'modal' }} />
         <Stack.Screen name="products/[id]" />
