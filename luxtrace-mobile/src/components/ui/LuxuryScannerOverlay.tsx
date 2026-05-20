@@ -54,12 +54,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
     letterSpacing: 3,
+    fontFamily: 'PlusJakartaSans-Bold',
   },
   instructionSubtext: {
     color: '#00FFB2',
     fontSize: 10,
     marginTop: 6,
     letterSpacing: 1,
+    fontFamily: 'PlusJakartaSans-SemiBold',
   },
   scannerRow: {
     flexDirection: 'row',

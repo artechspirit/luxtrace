@@ -7,6 +7,7 @@ import { nfcService } from '@/services/nfc.service'
 import { blockchainService } from '@/services/blockchain.service'
 import { paymentService } from '@/services/payment.service'
 import { refundTransaction } from '@/lib/midtrans'
+import { notificationService } from '@/services/notification.service'
 import type { Transaction } from '@/types'
 
 export const transactionService = {
@@ -38,13 +39,22 @@ export const transactionService = {
       throw Object.assign(new Error('Cannot trade with yourself'), { code: 'SELF_TRADE' })
     }
 
-    return paymentService.createPayment({
+    const paymentResult = await paymentService.createPayment({
       type: 'P2P_REMOTE_SHIPPING',
       productId,
       buyerId,
       sellerId,
       agreedPriceIdr,
     })
+
+    // Notify buyer of new request
+    notificationService.sendPushNotification(
+      buyerId,
+      'P2P Purchase Request',
+      `A secondary market trade of a luxury item has been requested. Escrow price: Rp ${agreedPriceIdr.toLocaleString('id-ID')}.`
+    ).catch(err => console.error('Failed to send notification on P2P Remote initiation:', err))
+
+    return paymentResult
   },
 
   /**
@@ -253,7 +263,18 @@ export const transactionService = {
         session_id: sessionId,
       },
     })
+    // Send push notifications to both parties
+    notificationService.sendPushNotification(
+      tx.buyer_id,
+      'Ownership Transfer Complete',
+      'NFC verified. Digital twin NFT successfully deposited in your custodial wallet!'
+    ).catch(err => console.error('Failed to notify buyer:', err))
 
+    notificationService.sendPushNotification(
+      tx.seller_id!,
+      'P2P Escrow Released',
+      'Buyer verified product authenticity. Escrow payment released successfully.'
+    ).catch(err => console.error('Failed to notify seller:', err))
     return {
       verified: true,
       transaction_id: transactionId,
@@ -296,6 +317,14 @@ export const transactionService = {
     })
 
     const qr = await nfcService.generateQrPayload(tx.transaction_id, productId, 5 * 60 * 1000)
+
+    // Notify buyer of direct handover request
+    notificationService.sendPushNotification(
+      buyerId,
+      'Direct Handover Ready',
+      `Seller has initiated a physical P2P handover. Scan their QR and verify physical NFC authenticity.`
+    ).catch(err => console.error('Failed to notify buyer of direct handover initiation:', err))
+
     return { transaction: tx, ...qr }
   },
 
@@ -338,11 +367,19 @@ export const transactionService = {
     const product = await productRepository.findById(productId)
     if (!seller || !buyer || !product) throw new Error('Data integrity error')
 
-    const { tx_hash } = await blockchainService.transferNFT(
-      seller.wallet_address,
-      buyer.wallet_address,
-      product.nft_token_id!
-    )
+    let tx_hash: string
+    try {
+      const result = await blockchainService.transferNFT(
+        seller.wallet_address,
+        buyer.wallet_address,
+        product.nft_token_id!
+      )
+      tx_hash = result.tx_hash
+    } catch (nftErr) {
+      console.error('[P2P Direct] NFT transfer failed:', nftErr)
+      await transactionRepository.updateStatus(transactionId, 'CANCELLED')
+      throw Object.assign(new Error('NFT transfer failed'), { code: 'NFT_TRANSFER_FAILED' })
+    }
 
     await productRepository.updateOwnerAndStatus(productId, tx.buyer_id, 'OWNED', tx_hash)
     await transactionRepository.updateStatus(transactionId, 'COMPLETED', {
@@ -362,6 +399,19 @@ export const transactionService = {
         to_wallet: buyer.wallet_address,
       },
     })
+
+    // Notify buyer and seller of successful handover
+    notificationService.sendPushNotification(
+      tx.buyer_id,
+      'Direct Handover Successful',
+      'Ownership verification complete. Luxury digital twin NFT added to your vault!'
+    ).catch(err => console.error('Failed to notify buyer:', err))
+
+    notificationService.sendPushNotification(
+      tx.seller_id!,
+      'Direct Handover Completed',
+      'Physical asset handover verified. Ownership transferred to the buyer.'
+    ).catch(err => console.error('Failed to notify seller:', err))
 
     return {
       verified: true,

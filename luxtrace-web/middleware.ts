@@ -84,7 +84,7 @@ function isValidUuid(val: any): boolean {
 }
 
 function isValidNfcUid(val: any): boolean {
-  return typeof val === 'string' && NFC_UID_REGEX.test(val)
+  return typeof val === 'string' && (NFC_UID_REGEX.test(val) || UUID_REGEX.test(val))
 }
 
 // ─── MAIN MIDDLEWARE HANDLER ─────────────────────────────────────────────────
@@ -164,37 +164,55 @@ export async function middleware(request: NextRequest) {
 
   // 4. Input Payload Validation & DOS Protection
   if (isMutatingAction) {
-    // DOS Protection: reject payloads greater than 15KB
-    const contentLength = parseInt(request.headers.get('content-length') || '0', 10)
-    if (contentLength > 15 * 1024) {
-      return NextResponse.json(
-        { error: 'PAYLOAD_TOO_LARGE', message: 'Payload exceeds maximum limit of 15KB' },
-        { status: 413 }
-      )
+    const isUploadRoute = pathname === '/api/products/upload'
+
+    // Apply appropriate payload size limits
+    if (isUploadRoute) {
+      const contentLength = parseInt(request.headers.get('content-length') || '0', 10)
+      if (contentLength > 1024 * 1024) { // 1MB limit for CSV uploads
+        return NextResponse.json(
+          { error: 'PAYLOAD_TOO_LARGE', message: 'CSV payload exceeds limit of 1MB' },
+          { status: 413 }
+        )
+      }
+    } else {
+      const contentLength = parseInt(request.headers.get('content-length') || '0', 10)
+      if (contentLength > 15 * 1024) { // 15KB limit for standard JSON API endpoints
+        return NextResponse.json(
+          { error: 'PAYLOAD_TOO_LARGE', message: 'Payload exceeds maximum limit of 15KB' },
+          { status: 413 }
+        )
+      }
     }
 
-    try {
-      const clonedReq = request.clone()
-      const body = await clonedReq.json()
+    const contentType = request.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      try {
+        const clonedReq = request.clone()
+        const text = await clonedReq.text()
+        if (text && text.trim().length > 0) {
+          const body = JSON.parse(text)
 
-      // Common parameter validations
-      if (body.session_id !== undefined && !isValidUuid(body.session_id)) {
-        return NextResponse.json({ error: 'VALIDATION_FAILED', message: 'session_id must be a valid UUIDv4' }, { status: 400 })
+          // Common parameter validations
+          if (body.session_id !== undefined && !isValidUuid(body.session_id)) {
+            return NextResponse.json({ error: 'VALIDATION_FAILED', message: 'session_id must be a valid UUIDv4' }, { status: 400 })
+          }
+          if (body.transaction_id !== undefined && !isValidUuid(body.transaction_id)) {
+            return NextResponse.json({ error: 'VALIDATION_FAILED', message: 'transaction_id must be a valid UUIDv4' }, { status: 400 })
+          }
+          if (body.product_id !== undefined && !isValidUuid(body.product_id)) {
+            return NextResponse.json({ error: 'VALIDATION_FAILED', message: 'product_id must be a valid UUIDv4' }, { status: 400 })
+          }
+          if (body.scanned_uid !== undefined && !isValidNfcUid(body.scanned_uid)) {
+            return NextResponse.json({ error: 'VALIDATION_FAILED', message: 'scanned_uid must be a valid NFC hardware UID hex pattern' }, { status: 400 })
+          }
+        }
+      } catch (e) {
+        return NextResponse.json(
+          { error: 'BAD_REQUEST', message: 'Invalid JSON body syntax' },
+          { status: 400 }
+        )
       }
-      if (body.transaction_id !== undefined && !isValidUuid(body.transaction_id)) {
-        return NextResponse.json({ error: 'VALIDATION_FAILED', message: 'transaction_id must be a valid UUIDv4' }, { status: 400 })
-      }
-      if (body.product_id !== undefined && !isValidUuid(body.product_id)) {
-        return NextResponse.json({ error: 'VALIDATION_FAILED', message: 'product_id must be a valid UUIDv4' }, { status: 400 })
-      }
-      if (body.scanned_uid !== undefined && !isValidNfcUid(body.scanned_uid)) {
-        return NextResponse.json({ error: 'VALIDATION_FAILED', message: 'scanned_uid must be a valid NFC hardware UID hex pattern' }, { status: 400 })
-      }
-    } catch (e) {
-      return NextResponse.json(
-        { error: 'BAD_REQUEST', message: 'Invalid JSON body syntax' },
-        { status: 400 }
-      )
     }
   }
 

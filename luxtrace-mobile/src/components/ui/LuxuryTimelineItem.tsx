@@ -73,11 +73,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: 'bold',
+    fontFamily: 'PlusJakartaSans-Bold',
   },
   subTimeText: {
     color: '#4a5568',
     fontSize: 9,
     marginTop: 2,
+    fontFamily: 'PlusJakartaSans-Regular',
   },
   nodeColumn: {
     width: 24,
@@ -149,11 +151,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 1.5,
     marginBottom: 4,
+    fontFamily: 'PlusJakartaSans-Bold',
   },
   eventActor: {
     color: '#718096',
     fontSize: 9,
     letterSpacing: 1,
     marginBottom: 10,
+    fontFamily: 'PlusJakartaSans-SemiBold',
   },
 })

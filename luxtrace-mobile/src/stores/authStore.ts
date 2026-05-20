@@ -20,8 +20,10 @@ interface AuthState {
   isLoading: boolean
   error: string | null
   login: (email: string, password: string) => Promise<boolean>
+  loginWithGoogleCode: (code: string) => Promise<boolean>
   logout: () => Promise<void>
   loadSession: () => Promise<void>
+  setSession: (token: string, user: UserProfile) => Promise<void>
   clearError: () => void
 }
 
@@ -33,6 +35,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   error: null,
 
   clearError: () => set({ error: null }),
+
+  setSession: async (token, user) => {
+    await SecureStore.setItemAsync(SECURE_STORE_TOKEN_KEY, token)
+    set({
+      token,
+      user,
+      isAuthenticated: true,
+      isLoading: false,
+      error: null,
+    })
+  },
 
   login: async (email, password) => {
     set({ isLoading: true, error: null })
@@ -72,6 +85,50 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (err: any) {
       set({
         error: err.message || 'Network error occurred during login',
+        isLoading: false,
+      })
+      return false
+    }
+  },
+
+  loginWithGoogleCode: async (code) => {
+    set({ isLoading: true, error: null })
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/oauth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Google OAuth exchange failed')
+      }
+
+      const { access_token, user_id, email, full_name, avatar_url, wallet_address, role } = result.data
+
+      // Save token to secure storage on device
+      await SecureStore.setItemAsync(SECURE_STORE_TOKEN_KEY, access_token)
+
+      set({
+        token: access_token,
+        user: {
+          user_id,
+          email,
+          full_name,
+          role,
+          wallet_address,
+          avatar_url,
+        },
+        isAuthenticated: true,
+        isLoading: false,
+      })
+
+      return true
+    } catch (err: any) {
+      set({
+        error: err.message || 'Network error occurred during Google OAuth',
         isLoading: false,
       })
       return false

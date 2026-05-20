@@ -9,6 +9,7 @@ import { productRepository } from '@/repositories/product.repository'
 import { productLogRepository } from '@/repositories/product-log.repository'
 import { profileRepository } from '@/repositories/profile.repository'
 import { blockchainService } from '@/services/blockchain.service'
+import { notificationService } from '@/services/notification.service'
 import type { TransactionType } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -238,6 +239,19 @@ export const paymentService = {
         // Product state changed concurrently — refund buyer
         await paymentService._refundOrder(orderId, transaction.amount_idr, 'Product state conflict')
         await transactionRepository.updateStatus(transactionId, 'CANCELLED')
+      } else {
+        // Trigger push notifications
+        notificationService.sendPushNotification(
+          transaction.seller_id!,
+          'P2P Escrow Funded',
+          'The buyer has completed their deposit. Please prepare the product and present the handover QR.'
+        ).catch(err => console.error('Failed to notify seller of escrow funding:', err))
+
+        notificationService.sendPushNotification(
+          transaction.buyer_id,
+          'Payment Locked',
+          'Your payment is safely locked in escrow. Authenticate physical NFC upon arrival to complete.'
+        ).catch(err => console.error('Failed to notify buyer of payment lock:', err))
       }
       return
     }

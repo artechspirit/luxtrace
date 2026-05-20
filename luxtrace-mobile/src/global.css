@@ -1,3 +1,17 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+@import "nativewind/theme";
+
+@theme {
+  --font-sans: 'PlusJakartaSans-Regular', sans-serif;
+  --font-jakarta: 'PlusJakartaSans-Regular';
+  --font-jakarta-medium: 'PlusJakartaSans-Medium';
+  --font-jakarta-semibold: 'PlusJakartaSans-SemiBold';
+  --font-jakarta-bold: 'PlusJakartaSans-Bold';
+  --font-jakarta-extrabold: 'PlusJakartaSans-ExtraBold';
+}
+
 :root {
   --font-display:
     Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,

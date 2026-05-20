@@ -94,6 +94,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     letterSpacing: 2,
+    fontFamily: 'PlusJakartaSans-Bold',
   },
   primaryText: {
     color: '#0A0A0A',

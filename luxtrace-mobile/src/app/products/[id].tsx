@@ -9,10 +9,14 @@ import {
   StatusBar,
   Platform,
   Clipboard,
-  Alert,
+  Modal,
+  TextInput,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { API_BASE_URL } from '@/constants/config'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useAuthStore } from '@/stores/authStore'
+import { useAlertStore } from '@/stores/alertStore'
 
 interface TimelineEvent {
   log_id: string
@@ -35,9 +39,147 @@ interface ProvenanceData {
 export default function ProductProvenanceScreen() {
   const { id } = useLocalSearchParams()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
+  const { token } = useAuthStore()
+  const { showAlert } = useAlertStore()
   const [data, setData] = useState<ProvenanceData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // P2P Listing States
+  const [isOwner, setIsOwner] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [transferMode, setTransferMode] = useState<'remote' | 'direct'>('remote')
+  const [agreedPrice, setAgreedPrice] = useState('')
+  const [buyerEmail, setBuyerEmail] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const checkOwnership = async () => {
+    if (!token || !id) return
+    try {
+      const response = await fetch(`${API_BASE_URL}/products`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      const result = await response.json()
+      if (response.ok && result.success) {
+        const owned = result.data?.items || result.data || []
+        const found = owned.some((p: any) => p.product_id === id)
+        setIsOwner(found)
+      }
+    } catch (e) {
+      console.warn('Failed to verify ownership', e)
+    }
+  }
+
+  const handleCreateListing = async () => {
+    if (!buyerEmail.trim()) {
+      showAlert('Validation Error', 'Please enter the buyer email address.')
+      return
+    }
+
+    if (transferMode === 'remote' && (!agreedPrice || isNaN(Number(agreedPrice)) || Number(agreedPrice) <= 0)) {
+      showAlert('Validation Error', 'Please enter a valid agreed price (IDR).')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      // 1. Lookup Buyer ID by Email
+      const lookupResponse = await fetch(`${API_BASE_URL}/users/lookup?email=${encodeURIComponent(buyerEmail.trim())}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      })
+      const lookupResult = await lookupResponse.json()
+      if (!lookupResponse.ok || !lookupResult.success) {
+        throw new Error(lookupResult.message || 'Buyer user profile not found. Make sure they are registered.')
+      }
+
+      const buyerId = lookupResult.data?.user_id
+      if (!buyerId) {
+        throw new Error('Could not resolve Buyer ID.')
+      }
+
+      // Generate Replay Protection Headers
+      const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+      const timestamp = Date.now().toString()
+
+      // 2. Initiate transaction
+      const endpoint = transferMode === 'remote' ? '/p2p/remote/init' : '/p2p/direct/init'
+      const payload = transferMode === 'remote' 
+        ? { product_id: id, buyer_id: buyerId, agreed_price_idr: Number(agreedPrice) }
+        : { product_id: id, buyer_id: buyerId }
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'x-nonce': nonce,
+          'x-timestamp': timestamp,
+        },
+        body: JSON.stringify(payload)
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Transaction initiation failed.')
+      }
+
+      // Auto-copy to clipboard for easier testing
+      if (transferMode === 'direct' && result.data?.session_id) {
+        Clipboard.setString(result.data.session_id)
+      }
+
+      // Success
+      showAlert(
+        'TRANSACTION INITIATED',
+        transferMode === 'remote'
+          ? `Remote shipping P2P Escrow initialized!\n\nMidtrans Snap URL generated. The buyer must pay the escrow to lock the transaction.`
+          : `Direct handover initialized successfully!\n\nSession ID: ${result.data?.session_id}\n\n(The Session ID has been automatically copied to your clipboard!)`,
+        transferMode === 'remote' ? [
+          {
+            text: 'OK',
+            onPress: () => {
+              setIsModalOpen(false)
+              setBuyerEmail('')
+              setAgreedPrice('')
+              fetchProvenance() // Refresh provenance history
+            }
+          }
+        ] : [
+          {
+            text: 'Copy ID',
+            onPress: () => {
+              if (result.data?.session_id) {
+                Clipboard.setString(result.data.session_id)
+              }
+              setIsModalOpen(false)
+              setBuyerEmail('')
+              setAgreedPrice('')
+              fetchProvenance()
+            }
+          },
+          {
+            text: 'OK',
+            onPress: () => {
+              setIsModalOpen(false)
+              setBuyerEmail('')
+              setAgreedPrice('')
+              fetchProvenance()
+            }
+          }
+        ]
+      )
+    } catch (err: any) {
+      showAlert('Listing Failed', err.message || 'Failed to initialize P2P Listing.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const fetchProvenance = async () => {
     setIsLoading(true)
@@ -61,12 +203,13 @@ export default function ProductProvenanceScreen() {
   useEffect(() => {
     if (id) {
       fetchProvenance()
+      checkOwnership()
     }
   }, [id])
 
   const copyToClipboard = (text: string, label: string) => {
     Clipboard.setString(text)
-    Alert.alert('Copied', `${label} copied to clipboard.`)
+    showAlert('Copied', `${label} copied to clipboard.`)
   }
 
   const formatDate = (isoString: string) => {
@@ -98,105 +241,111 @@ export default function ProductProvenanceScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View 
+      className="flex-1 bg-[#0A0A0A]"
+      style={{ paddingTop: Math.max(insets.top, 8) }}
+    >
       <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
 
       {/* Header bar */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>← BACK</Text>
+      <View className="flex-row justify-between items-center px-4 h-14 border-b border-white/5">
+        <TouchableOpacity className="py-2 px-3" onPress={() => router.back()}>
+          <Text className="text-[#00FFB2] text-xs font-jakarta-bold tracking-[1.5px]">← BACK</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>PROVENANCE CHAIN</Text>
-        <View style={{ width: 60 }} />
+        <Text className="text-white text-sm font-jakarta-bold tracking-[2px]">PROVENANCE CHAIN</Text>
+        <View className="w-16" />
       </View>
 
       {isLoading ? (
-        <View style={styles.centerContainer}>
+        <View className="flex-1 justify-center items-center p-6">
           <ActivityIndicator size="large" color="#00FFB2" />
-          <Text style={styles.loadingText}>Reading Ledger Records...</Text>
+          <Text className="text-[#a0aec0] text-xs font-jakarta tracking-wider mt-4">Reading Ledger Records...</Text>
         </View>
       ) : error ? (
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={fetchProvenance}>
-            <Text style={styles.retryButtonText}>RETRY SYNC</Text>
+        <View className="flex-1 justify-center items-center p-6">
+          <Text className="text-red-400 text-xs font-jakarta text-center mb-5">{error}</Text>
+          <TouchableOpacity className="border border-[#00FFB2] px-5 py-2.5 rounded-lg" onPress={fetchProvenance}>
+            <Text className="text-[#00FFB2] text-xs font-jakarta-bold tracking-[1.5px]">RETRY SYNC</Text>
           </TouchableOpacity>
         </View>
       ) : !data ? (
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>No records found</Text>
+        <View className="flex-1 justify-center items-center p-6">
+          <Text className="text-[#718096] text-xs font-jakarta text-center">No records found</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: Math.max(insets.bottom + 24, 60) }}>
           {/* Twin Properties Section */}
-          <View style={styles.productCard}>
-            <Text style={styles.productBrand}>{data.brand.toUpperCase()}</Text>
-            <Text style={styles.productName}>{data.name}</Text>
+          <View className="bg-[#0D1110] border border-[#00FFB2]/8 rounded-2xl p-5 mb-6">
+            <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[2px] mb-1">{data.brand.toUpperCase()}</Text>
+            <Text className="text-white text-lg font-jakarta-bold mb-4">{data.name}</Text>
 
-            <View style={styles.divider} />
+            <View className="h-[1px] bg-[#00FFB2]/10 mb-4" />
 
-            <View style={styles.metaGrid}>
-              <View style={styles.metaItem}>
-                <Text style={styles.metaLabel}>SERIAL NUMBER</Text>
-                <Text style={styles.metaValue} numberOfLines={1}>{data.serial_number}</Text>
+            <View className="flex-row justify-between mb-4">
+              <View className="flex-[0.48]">
+                <Text className="text-[#4a5568] text-[8px] font-jakarta-bold tracking-wider mb-1">SERIAL NUMBER</Text>
+                <Text className="text-[#a0aec0] text-[11px] font-jakarta-semibold" numberOfLines={1}>{data.serial_number}</Text>
               </View>
-              <View style={styles.metaItem}>
-                <Text style={styles.metaLabel}>NFT TOKEN ID</Text>
-                <Text style={styles.metaValue}>{data.nft_token_id ? `# ${data.nft_token_id}` : 'UNMINTED'}</Text>
+              <View className="flex-[0.48]">
+                <Text className="text-[#4a5568] text-[8px] font-jakarta-bold tracking-wider mb-1">NFT TOKEN ID</Text>
+                <Text className="text-[#a0aec0] text-[11px] font-jakarta-semibold">{data.nft_token_id ? `# ${data.nft_token_id}` : 'UNMINTED'}</Text>
               </View>
             </View>
 
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>REGISTRY STATE:</Text>
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>{data.current_status}</Text>
+            <View className="flex-row items-center mt-2">
+              <Text className="text-[#718096] text-xs font-jakarta-medium mr-2">REGISTRY STATE:</Text>
+              <View className="bg-[#00FFB2]/10 border border-[#00FFB2]/20 px-2.5 py-1 rounded-md">
+                <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold">{data.current_status}</Text>
               </View>
             </View>
           </View>
 
           {/* Timeline Section */}
-          <Text style={styles.timelineHeaderTitle}>CHRONOLOGICAL LEDGER</Text>
+          <Text className="text-white text-xs font-jakarta-bold tracking-[2px] mb-5 opacity-70">CHRONOLOGICAL LEDGER</Text>
 
           {data.timeline && data.timeline.length > 0 ? (
-            <View style={styles.timelineContainer}>
+            <View className="pl-1">
               {data.timeline.map((event, index) => {
                 const isLast = index === data.timeline.length - 1
                 const config = getEventStyle(event.event)
                 const isFraud = event.event.includes('FRAUD')
 
                 return (
-                  <View key={event.log_id} style={styles.timelineItem}>
+                  <View key={event.log_id} className="flex-row min-h-[90px]">
                     {/* Time Marker Column */}
-                    <View style={styles.timeColumn}>
-                      <Text style={styles.timeText}>
+                    <View className="w-[65px] pr-2 items-end pt-2">
+                      <Text className="text-white text-[11px] font-jakarta-bold">
                         {formatDate(event.timestamp).split(',')[0]}
                       </Text>
-                      <Text style={styles.subTimeText}>
+                      <Text className="text-[#4a5568] text-[9px] font-jakarta mt-0.5">
                         {formatDate(event.timestamp).split(',')[1]?.trim().split(' ')[0] || ''}
                       </Text>
                     </View>
 
                     {/* Glowing Node Column */}
-                    <View style={styles.nodeColumn}>
-                      <View style={[styles.outerNodeCircle, isFraud && styles.outerCircleRed]}>
-                        <View style={[styles.innerNodeDot, { backgroundColor: config.color }, config.glow]} />
+                    <View className="w-6 items-center relative">
+                      <View className={`w-4 h-4 rounded-full justify-center items-center z-10 border ${isFraud ? 'bg-red-500/10 border-red-500/30' : 'bg-[#00FFB2]/10 border-[#00FFB2]/25'}`}>
+                        <View className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color }} />
                       </View>
-                      {!isLast && <View style={styles.timelineLine} />}
+                      {!isLast && <View className="w-[1.5px] bg-[#00FFB2]/15 absolute top-[16px] bottom-[-16px] z-0" />}
                     </View>
 
                     {/* Event Detail Card Column */}
-                    <View style={styles.cardColumn}>
-                      <View style={[styles.eventCard, isFraud && styles.eventCardRed]}>
-                        <Text style={[styles.eventTitle, { color: config.color }]}>
+                    <View className="flex-grow pl-3 pb-6">
+                      <View 
+                        className={`bg-[#0D1110]/50 border rounded-xl p-4.5 ${isFraud ? 'border-red-500/15 bg-red-500/2' : 'border-white/5'}`}
+                        style={{ borderLeftColor: config.color, borderLeftWidth: 3 }}
+                      >
+                        <Text className="text-xs font-jakarta-bold tracking-wider mb-1" style={{ color: config.color }}>
                           {config.label}
                         </Text>
-                        <Text style={styles.eventActor}>
+                        <Text className="text-[#718096] text-[9px] font-jakarta-semibold tracking-wide mb-2">
                           ACTOR: {event.actor_role.toUpperCase()}
                         </Text>
 
                         {/* Metadata details */}
                         {event.metadata && (
-                          <View style={styles.metadataBox}>
+                          <View className="bg-black/40 rounded-lg p-2 mt-1">
                             {Object.entries(event.metadata).map(([key, val]) => {
                               if (typeof val === 'object') return null
                               const valStr = String(val)
@@ -206,17 +355,14 @@ export default function ProductProvenanceScreen() {
                                   key={key}
                                   disabled={!isAddress}
                                   onPress={() => isAddress && copyToClipboard(valStr, key)}
-                                  style={styles.metadataRow}
+                                  className="flex-row justify-between py-1"
                                 >
-                                  <Text style={styles.metadataKey}>
+                                  <Text className="text-[#4a5568] text-[8px] font-jakarta-bold">
                                     {key.replace('_', ' ').toUpperCase()}:
                                   </Text>
                                   <Text
                                     numberOfLines={1}
-                                    style={[
-                                      styles.metadataVal,
-                                      isAddress && styles.addressVal,
-                                    ]}
+                                    className={`text-[#a0aec0] text-[9px] flex-1 text-right pl-3 ${isAddress ? 'text-[#00FFB2] underline' : ''}`}
                                   >
                                     {valStr}
                                   </Text>
@@ -232,12 +378,145 @@ export default function ProductProvenanceScreen() {
               })}
             </View>
           ) : (
-            <View style={styles.noHistoryBox}>
-              <Text style={styles.noHistoryText}>No provenance history registered.</Text>
+            <View className="bg-[#0D1110]/50 border border-white/5 rounded-xl p-6 items-center">
+              <Text className="text-[#4a5568] text-xs font-jakarta">No provenance history registered.</Text>
             </View>
           )}
         </ScrollView>
       )}
+
+      {/* Sell / Transfer Trigger Button */}
+      {isOwner && data?.current_status === 'OWNED' && (
+        <View 
+          className="px-6 border-t border-white/5 bg-[#0A0A0A]"
+          style={{
+            paddingTop: 16,
+            paddingBottom: Math.max(insets.bottom, 16),
+          }}
+        >
+          <TouchableOpacity
+            className="bg-[#00FFB2] h-12 rounded-xl items-center justify-center shadow-lg shadow-[#00FFB2]/20"
+            onPress={() => setIsModalOpen(true)}
+            activeOpacity={0.8}
+          >
+            <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px]">
+              SELL / TRANSFER ASSET
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* P2P Listing Inception Modal */}
+      <Modal
+        visible={isModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsModalOpen(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 justify-end bg-black/60"
+          activeOpacity={1}
+          onPress={() => setIsModalOpen(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            className="bg-[#111111] border-t border-[#00FFB2]/25 rounded-t-[30px] p-6"
+            style={{
+              width: '100%',
+              shadowColor: '#00FFB2',
+              shadowOffset: { width: 0, height: -8 },
+              shadowOpacity: 0.2,
+              shadowRadius: 16,
+              elevation: 24,
+              paddingBottom: Math.max(insets.bottom + 20, 40),
+            }}
+          >
+            {/* Drag Handle Indicator */}
+            <View className="w-12 h-1 bg-white/20 rounded-full mb-4" style={{ alignSelf: 'center' }} />
+
+            {/* Modal Header */}
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-white text-base font-jakarta-bold tracking-wide">P2P TRANSFER INCEPTION</Text>
+              <TouchableOpacity onPress={() => setIsModalOpen(false)}>
+                <Text className="text-[#718096] text-xs font-jakarta-bold">CLOSE</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Mode selection toggles */}
+            <View className="flex-row bg-[#0A0A0A] p-1 rounded-xl mb-6 border border-white/5">
+              <TouchableOpacity
+                className={`flex-1 py-2.5 rounded-lg items-center ${transferMode === 'remote' ? 'bg-[#00FFB2]' : ''}`}
+                onPress={() => setTransferMode('remote')}
+              >
+                <Text className={`text-[10px] font-jakarta-bold tracking-wider ${transferMode === 'remote' ? 'text-[#0A0A0A]' : 'text-[#718096]'}`}>
+                  REMOTE SHIPPING
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`flex-1 py-2.5 rounded-lg items-center ${transferMode === 'direct' ? 'bg-[#00FFB2]' : ''}`}
+                onPress={() => setTransferMode('direct')}
+              >
+                <Text className={`text-[10px] font-jakarta-bold tracking-wider ${transferMode === 'direct' ? 'text-[#0A0A0A]' : 'text-[#718096]'}`}>
+                  DIRECT HANDOVER
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Buyer Email Input */}
+            <View className="mb-5">
+              <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-2">BUYER EMAIL ADDRESS</Text>
+              <TextInput
+                className="bg-[#0A0A0A] text-white text-sm px-4 h-12 rounded-xl border border-white/5 font-jakarta"
+                placeholder="e.g. buyer@example.com"
+                placeholderTextColor="#4a5568"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+                value={buyerEmail}
+                onChangeText={setBuyerEmail}
+              />
+              <Text className="text-[#718096] text-[10px] font-jakarta mt-2">
+                The buyer must have a registered Luxtrace account.
+              </Text>
+            </View>
+
+            {/* Price input (Only for Remote Shipping) */}
+            {transferMode === 'remote' && (
+              <View className="mb-6">
+                <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-2">AGREED PRICE (IDR)</Text>
+                <TextInput
+                  className="bg-[#0A0A0A] text-white text-sm px-4 h-12 rounded-xl border border-white/5 font-jakarta"
+                  placeholder="e.g. 50000000"
+                  placeholderTextColor="#4a5568"
+                  keyboardType="numeric"
+                  autoCorrect={false}
+                  value={agreedPrice}
+                  onChangeText={setAgreedPrice}
+                />
+                <Text className="text-[#718096] text-[10px] font-jakarta mt-2">
+                  Agreed payment price to be locked in Midtrans escrow.
+                </Text>
+              </View>
+            )}
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              className="bg-[#00FFB2] h-12 rounded-xl items-center justify-center shadow-md shadow-[#00FFB2]/20 flex-row"
+              onPress={handleCreateListing}
+              disabled={isSubmitting}
+              activeOpacity={0.8}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#0A0A0A" size="small" />
+              ) : (
+                <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px]">
+                  INITIATE P2P TRANSACTION
+                </Text>
+              )}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   )
 }
@@ -246,7 +525,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0A0A0A',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
   },
   header: {
     flexDirection: 'row',
@@ -309,12 +587,16 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
   productCard: {
-    backgroundColor: 'rgba(15, 42, 37, 0.15)',
+    backgroundColor: 'rgba(11, 15, 14, 0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 255, 178, 0.2)',
+    borderColor: 'rgba(0, 255, 178, 0.08)',
     borderRadius: 20,
     padding: 20,
     marginBottom: 32,
+    shadowColor: '#00FFB2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 10,
   },
   productBrand: {
     color: '#00FFB2',
@@ -366,8 +648,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statusBadge: {
-    backgroundColor: 'rgba(0, 255, 178, 0.15)',
-    borderColor: 'rgba(0, 255, 178, 0.3)',
+    backgroundColor: 'rgba(0, 255, 178, 0.08)',
+    borderColor: 'rgba(0, 255, 178, 0.2)',
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -461,10 +743,10 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   eventCard: {
-    backgroundColor: '#111111',
+    backgroundColor: 'rgba(11, 15, 14, 0.55)',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.02)',
+    borderColor: 'rgba(0, 255, 178, 0.05)',
     padding: 14,
   },
   eventCardRed: {
@@ -510,7 +792,9 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   noHistoryBox: {
-    backgroundColor: '#111111',
+    backgroundColor: 'rgba(11, 15, 14, 0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 178, 0.08)',
     borderRadius: 12,
     padding: 24,
     alignItems: 'center',

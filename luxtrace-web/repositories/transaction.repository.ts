@@ -74,7 +74,7 @@ export const transactionRepository = {
   async findAll(): Promise<Transaction[]> {
     const { data, error } = await supabase
       .from('transactions')
-      .select('*')
+      .select('*, product:products(*)')
       .order('created_at', { ascending: false })
 
     if (error) throw new Error(`transactionRepository.findAll: ${error.message}`)

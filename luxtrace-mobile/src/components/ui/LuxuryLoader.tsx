@@ -146,6 +146,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 16,
     textAlign: 'center',
+    fontFamily: 'PlusJakartaSans-Bold',
   },
   stepBox: {
     height: 48,
@@ -158,6 +159,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     fontWeight: '500',
+    fontFamily: 'PlusJakartaSans-Medium',
   },
   progressBarBg: {
     width: '100%',
@@ -180,5 +182,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     letterSpacing: 1,
     textAlign: 'center',
+    fontFamily: 'PlusJakartaSans-Bold',
   },
 })

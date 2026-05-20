@@ -21,11 +21,13 @@ import {
   waitForReceipt,
   prepareContractCall,
   readContract,
+  prepareTransaction,
 } from 'thirdweb'
 import { sepolia } from 'thirdweb/chains'
-import { privateKeyToAccount } from 'thirdweb/wallets'
+import { privateKeyToAccount, getWalletBalance } from 'thirdweb/wallets'
 import { mintTo, transferFrom } from 'thirdweb/extensions/erc721'
 import crypto from 'crypto'
+import { supabase } from './supabase'
 
 // ─── ENV Validation ───────────────────────────────────────────────────────────
 
@@ -198,12 +200,81 @@ export async function transferNFTFromBrand(
  * In custodial model: brand wallet is always `from` (logical seller tracked in DB).
  */
 export async function transferNFTBetweenUsers(
-  _fromWallet: string, // logical seller (tracked in DB, not used for signing)
+  fromWallet: string,
   toWallet: string,
   tokenId: string
 ): Promise<TransferNFTResult> {
-  // Custodial model: brand wallet holds all NFTs and transfers to buyer
-  return transferNFTFromBrand(toWallet, tokenId)
+  // 1. If it's from the brand wallet, just do normal brand transfer
+  if (fromWallet.toLowerCase() === brandWalletAddress.toLowerCase()) {
+    return transferNFTFromBrand(toWallet, tokenId)
+  }
+
+  // 2. Otherwise, look up the seller's user ID from Supabase by their wallet address
+  // and derive their private key to sign the transaction.
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('user_id')
+    .eq('wallet_address', fromWallet)
+    .single()
+
+  if (error || !profile) {
+    throw new Error(`[Blockchain Service] Seller profile not found for wallet: ${fromWallet}`)
+  }
+
+  const masterSeed = process.env.WALLET_MASTER_SEED
+  if (!masterSeed) throw new Error('[ENV] WALLET_MASTER_SEED is required')
+
+  // Derive private key deterministically
+  const derivedKey = crypto
+    .createHmac('sha256', masterSeed)
+    .update(profile.user_id)
+    .digest('hex')
+
+  const privateKey = `0x${derivedKey}` as `0x${string}`
+  const sellerAccount = privateKeyToAccount({ client, privateKey })
+
+  // Check seller's balance to ensure they have gas for transaction execution
+  const balance = await getWalletBalance({
+    client,
+    chain,
+    address: sellerAccount.address,
+  })
+
+  // If balance is less than 0.001 ETH, transfer 0.002 ETH from brand wallet to seller wallet
+  if (balance.value < BigInt("1000000000000000")) {
+    console.log(`[Blockchain Service] Funding seller wallet ${sellerAccount.address} with gas from brand wallet...`)
+    const fundTransaction = prepareTransaction({
+      to: sellerAccount.address,
+      value: BigInt("2000000000000000"), // 0.002 ETH
+      chain,
+      client,
+    })
+
+    const fundReceipt = await sendTransaction({
+      transaction: fundTransaction,
+      account: brandAccount,
+    })
+    await waitForReceipt({
+      client,
+      chain,
+      transactionHash: fundReceipt.transactionHash,
+    })
+    console.log(`[Blockchain Service] Gas funding complete. Tx: ${fundReceipt.transactionHash}`)
+  }
+
+  // Prepare standard ERC721 transferFrom from seller to buyer
+  const transaction = transferFrom({
+    contract: nftContract,
+    from: sellerAccount.address,
+    to: toWallet as `0x${string}`,
+    tokenId: BigInt(tokenId),
+  })
+
+  // Sign and submit transaction using the seller's account
+  const receipt = await sendTransaction({ transaction, account: sellerAccount })
+  await waitForReceipt({ client, chain, transactionHash: receipt.transactionHash })
+
+  return { txHash: receipt.transactionHash }
 }
 
 // ─── Contract Read ────────────────────────────────────────────────────────────

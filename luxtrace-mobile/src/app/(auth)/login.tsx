@@ -13,80 +13,199 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useAuthStore } from '@/stores/authStore'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import * as WebBrowser from 'expo-web-browser'
+import * as Linking from 'expo-linking'
+import { API_BASE_URL } from '@/constants/config'
+import { useAlertStore } from '@/stores/alertStore'
+import { LuxuryLoader } from '@/components/ui/LuxuryLoader'
+
+WebBrowser.maybeCompleteAuthSession()
+
+const ONBOARDING_STEPS = [
+  'Establishing secure gateway handshake...',
+  'Resolving decentralized profile state...',
+  'Synchronizing custodial cryptographic wallet...',
+  'Securing digital twin ownership registry...',
+  'Finalizing active user session...'
+]
 
 export default function LoginScreen() {
   const router = useRouter()
-  const { login, isLoading, error, isAuthenticated, user, clearError } = useAuthStore()
+  const insets = useSafeAreaInsets()
+  const { setSession, isAuthenticated, user, clearError } = useAuthStore()
+  const { showAlert } = useAlertStore()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isFocusedEmail, setIsFocusedEmail] = useState(false)
   const [isFocusedPassword, setIsFocusedPassword] = useState(false)
+  
+  // Luxury Loader states
+  const [isLuxuryLoading, setIsLuxuryLoading] = useState(false)
+  const [loaderFinished, setLoaderFinished] = useState(false)
+  const [pendingSession, setPendingSession] = useState<{ token: string; user: any } | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Clear errors when entering screen
   useEffect(() => {
     clearError()
   }, [])
 
+  // Sync animation finish with login resolution to avoid premature routing
+  useEffect(() => {
+    if (loaderFinished && pendingSession) {
+      setIsLuxuryLoading(false)
+      setSession(pendingSession.token, pendingSession.user)
+    }
+  }, [loaderFinished, pendingSession])
+
+  const handleGoogleLogin = async () => {
+    clearError()
+    try {
+      const redirectUrl = Linking.createURL('auth-callback')
+      console.log('[Google Login] Redirect URL:', redirectUrl)
+
+      const response = await fetch(`${API_BASE_URL}/auth/oauth/google?redirect_to=${encodeURIComponent(redirectUrl)}`)
+      const result = await response.json()
+
+      if (!response.ok || !result.success || !result.data?.url) {
+        throw new Error(result.message || 'Failed to initialize Google OAuth session.')
+      }
+
+      const authUrl = result.data.url
+      const browserResult = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl)
+
+      if (browserResult.type === 'success' && browserResult.url) {
+        const parsedUrl = Linking.parse(browserResult.url)
+        const code = parsedUrl.queryParams?.code as string | undefined
+
+        if (code) {
+          // Trigger the 12.5s Luxury Loader immediately
+          setIsLuxuryLoading(true)
+          setLoaderFinished(false)
+          setPendingSession(null)
+
+          const exchangeResponse = await fetch(`${API_BASE_URL}/auth/oauth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+          })
+
+          const exchangeResult = await exchangeResponse.json()
+
+          if (!exchangeResponse.ok || !exchangeResult.success) {
+            throw new Error(exchangeResult.message || 'Google OAuth exchange failed')
+          }
+
+          const { access_token, user_id, email: userEmail, full_name, avatar_url, wallet_address, role } = exchangeResult.data
+          const userData = { user_id, email: userEmail, full_name, role, wallet_address, avatar_url }
+
+          setPendingSession({ token: access_token, user: userData })
+        } else {
+          throw new Error('Google OAuth callback did not contain authentication code.')
+        }
+      } else if (browserResult.type === 'cancel') {
+        console.log('[Google Login] User cancelled session.')
+      } else {
+        throw new Error('Google OAuth flow aborted or failed.')
+      }
+    } catch (err: any) {
+      console.error('[Google Login Error]', err)
+      setIsLuxuryLoading(false)
+      useAuthStore.setState({ error: err.message || 'Failed to authenticate with Google' })
+      showAlert('Authentication Failed', err.message || 'Failed to authenticate with Google.')
+    }
+  }
+
   // Handle redirect on successful login
   useEffect(() => {
     if (isAuthenticated && user) {
       if (user.role === 'ADMIN' || user.role === 'OPERATOR') {
-        router.replace('/explore') // Will route to operator screen when built
+        router.replace('/explore')
       } else {
-        router.replace('/') // Routes to consumer dashboard
+        router.replace('/')
       }
     }
   }, [isAuthenticated, user])
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
+      showAlert('Input Required', 'Please enter both your email address and password.')
       return
     }
-    await login(email.trim(), password)
+
+    setIsSubmitting(true)
+    setIsLuxuryLoading(true)
+    setLoaderFinished(false)
+    setPendingSession(null)
+    clearError()
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Login failed')
+      }
+
+      const { access_token, user_id, full_name, avatar_url, wallet_address, role } = result.data
+      const userData = { user_id, email: email.trim(), full_name, role, wallet_address, avatar_url }
+
+      setPendingSession({ token: access_token, user: userData })
+    } catch (err: any) {
+      setIsLuxuryLoading(false)
+      useAuthStore.setState({ error: err.message || 'Invalid email or password.' })
+      showAlert('Access Denied', err.message || 'Invalid email or password.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
-    <View style={styles.container}>
+    <View 
+      className="flex-1 bg-[#0A0A0A]"
+      style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+    >
+      <LuxuryLoader
+        isOpen={isLuxuryLoading}
+        title="SECURE GATEWAY ENCRYPTION"
+        steps={ONBOARDING_STEPS}
+        onFinished={() => setLoaderFinished(true)}
+      />
       <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
+        className="flex-1"
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContainer}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 }}
           keyboardShouldPersistTaps="handled"
         >
           {/* Logo Section */}
-          <View style={styles.logoContainer}>
-            <View style={styles.logoGlow}>
-              <View style={styles.logoBox}>
-                <Text style={styles.logoLetter}>L</Text>
-              </View>
+          <View className="items-center mb-10">
+            <View className="w-16 h-16 rounded-xl bg-[#0A0A0A] border border-[#00FFB2]/30 items-center justify-center shadow-md shadow-[#00FFB2]/10">
+              <Text className="text-[#00FFB2] text-2xl font-jakarta-extrabold tracking-wider">L</Text>
             </View>
-            <Text style={styles.logoText}>LUXTRACE</Text>
-            <Text style={styles.logoTagline}>DIGITAL TWIN AUTHENTICATOR</Text>
+            <Text className="text-white text-xl font-jakarta-bold tracking-[4px] mt-4">LUXTRACE</Text>
+            <Text className="text-[#00FFB2] text-[9px] font-jakarta-semibold tracking-[2px] mt-1">DIGITAL TWIN AUTHENTICATOR</Text>
           </View>
 
-          {/* Form Card (Luxury Glassmorphic Panel) */}
-          <View style={styles.card}>
-            <Text style={styles.cardHeader}>SECURE GATEWAY</Text>
-            <Text style={styles.cardSubtitle}>Sign in to authenticate luxury assets</Text>
-
-            {error && (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            )}
+          {/* Form Card (Simple & Elegant Panel) */}
+          <View className="bg-[#111111] border border-white/5 rounded-2xl p-6">
+            <Text className="text-[#00FFB2] text-[10px] font-jakarta-bold tracking-[2px] mb-1">SECURE GATEWAY</Text>
+            <Text className="text-[#718096] text-xs font-jakarta mb-6">Sign in to authenticate luxury assets</Text>
 
             {/* Email Field */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>EMAIL ADDRESS</Text>
+            <View className="mb-5">
+              <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-2">EMAIL ADDRESS</Text>
               <TextInput
-                style={[
-                  styles.input,
-                  isFocusedEmail && styles.inputFocused,
-                ]}
+                className={`bg-[#0A0A0A] text-white text-sm font-jakarta px-4 h-12 rounded-xl border ${isFocusedEmail ? 'border-[#00FFB2] bg-[#141e1c]/30' : 'border-white/5'}`}
                 placeholder="operator@luxtrace.com"
                 placeholderTextColor="#4a5568"
                 keyboardType="email-address"
@@ -100,13 +219,10 @@ export default function LoginScreen() {
             </View>
 
             {/* Password Field */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>SECURITY KEY / PASSWORD</Text>
+            <View className="mb-6">
+              <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-2">SECURITY KEY / PASSWORD</Text>
               <TextInput
-                style={[
-                  styles.input,
-                  isFocusedPassword && styles.inputFocused,
-                ]}
+                className={`bg-[#0A0A0A] text-white text-sm font-jakarta px-4 h-12 rounded-xl border ${isFocusedPassword ? 'border-[#00FFB2] bg-[#141e1c]/30' : 'border-white/5'}`}
                 placeholder="••••••••••••"
                 placeholderTextColor="#4a5568"
                 secureTextEntry
@@ -123,23 +239,40 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={styles.button}
               onPress={handleLogin}
-              disabled={isLoading}
+              disabled={isSubmitting}
               activeOpacity={0.8}
             >
-              {isLoading ? (
-                <ActivityIndicator color="#000000" size="small" />
+              {isSubmitting ? (
+                <ActivityIndicator color="#0A0A0A" size="small" />
               ) : (
-                <Text style={styles.buttonText}>ESTABLISH CONNECTION</Text>
+                <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px]">ESTABLISH CONNECTION</Text>
               )}
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View className="flex-row items-center my-4">
+              <View className="flex-1 h-[1px] bg-white/5" />
+              <Text className="text-[#4a5568] text-[9px] font-jakarta-bold mx-3 tracking-widest">OR</Text>
+              <View className="flex-1 h-[1px] bg-white/5" />
+            </View>
+
+            {/* Google Login Button */}
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={handleGoogleLogin}
+              disabled={isSubmitting}
+              activeOpacity={0.8}
+            >
+              <Text className="text-white text-xs font-jakarta-bold tracking-[1.5px]">CONTINUE WITH GOOGLE</Text>
             </TouchableOpacity>
           </View>
 
           {/* Info Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
+          <View className="items-center mt-10">
+            <Text className="text-[#4a5568] text-[9px] font-jakarta-semibold tracking-wider text-center">
               Powered by Ethereum Sepolia PoA & NFC cryptography
             </Text>
-            <Text style={styles.footerSubtext}>
+            <Text className="text-[#718096] text-[10px] font-jakarta text-center mt-1">
               Invisible Custodial Wallet Gated Client
             </Text>
           </View>
@@ -208,10 +341,10 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'CourierNewPS-BoldMT' : 'monospace',
   },
   card: {
-    backgroundColor: 'rgba(15, 42, 37, 0.15)',
+    backgroundColor: 'rgba(11, 15, 14, 0.55)',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(0, 255, 178, 0.15)',
+    borderColor: 'rgba(0, 255, 178, 0.08)',
     padding: 24,
     shadowColor: '#00FFB2',
     shadowOffset: { width: 0, height: 10 },
@@ -258,7 +391,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: '#0F0F0F',
-    borderColor: 'rgba(0, 255, 178, 0.1)',
+    borderColor: 'rgba(0, 255, 178, 0.08)',
     borderWidth: 1.5,
     borderRadius: 10,
     height: 50,
@@ -282,6 +415,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
+  },
+  googleButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1.5,
+    borderRadius: 10,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 5,
   },
   buttonText: {
     color: '#0A0A0A',
