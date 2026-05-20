@@ -8,7 +8,6 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [isWalletConnecting, setIsWalletConnecting] = useState(false)
   const [error, setError] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -42,24 +41,6 @@ export default function Login() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleConnectWallet = () => {
-    setIsWalletConnecting(true)
-    setError('')
-    // Web3 Wallet simulation for testing or fallback
-    setTimeout(() => {
-      setIsWalletConnecting(false)
-      // Save mockup profile for testing layout
-      localStorage.setItem('luxtrace_token', 'mockup-wallet-session-token')
-      localStorage.setItem('luxtrace_user', JSON.stringify({
-        user_id: 'mock-wallet-operator',
-        email: 'operator@luxtrace.com',
-        role: 'ADMIN',
-        wallet_address: '0x3f6a27318ecacdd8849b40003bc9223e2b289a22'
-      }))
-      router.push('/dashboard')
-    }, 1200)
   }
 
   return (
@@ -112,7 +93,7 @@ export default function Login() {
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isLoading || isWalletConnecting}
+              disabled={isLoading}
               className="w-full glow-btn py-3 rounded-lg text-xs font-dm font-bold uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {isLoading ? (
@@ -129,38 +110,6 @@ export default function Login() {
             </button>
           </div>
         </form>
-
-        <div className="relative my-6 flex items-center justify-center">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/5"></div>
-          </div>
-          <span className="relative px-3 bg-[#0A0A0A] text-[9px] text-zinc-500 font-mono uppercase tracking-widest">
-            or
-          </span>
-        </div>
-
-        <button
-          onClick={handleConnectWallet}
-          disabled={isLoading || isWalletConnecting}
-          className="w-full py-3 border border-[#00FFB2]/20 hover:border-[#00FFB2]/40 bg-[#0F2A25]/10 hover:bg-[#0F2A25]/20 rounded-lg text-xs text-[#00FFB2] font-mono uppercase tracking-widest flex items-center justify-center gap-2 transition duration-200 disabled:opacity-50"
-        >
-          {isWalletConnecting ? (
-            <>
-              <svg className="animate-spin h-3.5 w-3.5 text-[#00FFB2]" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span>Generating Identity...</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-              </svg>
-              <span>Connect Web3 Wallet</span>
-            </>
-          )}
-        </button>
 
         {/* Footer info */}
         <p className="text-[8px] text-zinc-600 font-mono text-center mt-6 uppercase tracking-wider">
