@@ -147,6 +147,22 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'products' | 'transactions'
   const [productStatusFilter, setProductStatusFilter] = useState('ALL')
+  const [adminUser, setAdminUser] = useState<any | null>(null)
+
+  // Dynamic KPIs calculations from active state
+  const totalTwins = products.length
+
+  const activeEscrowsList = transactions.filter(t => ['PENDING', 'PAID', 'IN_TRANSIT'].includes(t.status))
+  const activeEscrowsCount = activeEscrowsList.length
+  const lockedVolumeVal = activeEscrowsList.reduce((sum, t) => sum + (t.amountNum || 0), 0)
+
+  const formatVolume = (val: number) => {
+    if (val >= 1e9) return `Rp ${(val / 1e9).toFixed(2)}B`
+    if (val >= 1e6) return `Rp ${(val / 1e6).toFixed(2)}M`
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val)
+  }
+
+  const activeHandoversCount = transactions.filter(t => t.type === 'P2P_DIRECT_HANDOVER' && ['PENDING', 'PAID', 'IN_TRANSIT'].includes(t.status)).length
 
   // Sync tab with URL search parameter on mount
   useEffect(() => {
@@ -184,6 +200,19 @@ export default function Dashboard() {
 
     const fetchData = async () => {
       try {
+        // Fetch current admin profile
+        try {
+          const userRes = await fetch('/api/auth/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          const userData = await userRes.json()
+          if (userRes.ok && userData.success) {
+            setAdminUser(userData.data)
+          }
+        } catch (e) {
+          console.warn('[Dashboard] Failed to fetch admin profile.', e)
+        }
+
         // Fetch products
         const prodRes = await fetch('/api/products', {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -234,6 +263,7 @@ export default function Dashboard() {
             serial: t.serial_number || 'N/A',
             type: t.type,
             amount: `Rp ${t.amount_idr.toLocaleString('id-ID')}`,
+            amountNum: t.amount_idr,
             status: t.status,
             date: new Date(t.created_at).toLocaleDateString()
           }))
@@ -319,6 +349,7 @@ export default function Dashboard() {
           serial: t.serial_number || 'N/A',
           type: t.type,
           amount: `Rp ${t.amount_idr.toLocaleString('id-ID')}`,
+          amountNum: t.amount_idr,
           status: t.status,
           date: new Date(t.created_at).toLocaleDateString()
         }))
@@ -657,7 +688,15 @@ export default function Dashboard() {
               <span className="w-2 h-2 rounded-full bg-[#00FFB2] animate-pulse"></span>
               <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-mono">SEPOLIA GATEWAY</span>
             </div>
-            <p className="text-xs text-white font-mono truncate mb-1">0xBrand...Custody</p>
+            <p className="text-xs text-white font-mono truncate mb-1" title={adminUser?.wallet_address || '0xBrand...Custody'}>
+              {adminUser?.wallet_address 
+                ? `${adminUser.wallet_address.slice(0, 6)}...${adminUser.wallet_address.slice(-4)}`
+                : '0xBrand...Custody'}
+            </p>
+            <div className="mt-2 pt-2 border-t border-white/5">
+              <p className="text-[11px] font-bold text-white truncate">{adminUser?.full_name || 'System Operator'}</p>
+              <p className="text-[9px] text-zinc-500 truncate">{adminUser?.email || 'operator@luxtrace.com'}</p>
+            </div>
             <div className="flex items-center justify-between text-[9px] text-[#00FFB2] font-mono border-t border-white/5 pt-2 mt-2">
               <span>GAS RELAYER: ACTIVE</span>
               <span className="opacity-60">12s LATENCY</span>
@@ -753,8 +792,8 @@ export default function Dashboard() {
                 <div className="absolute right-0 top-0 w-24 h-24 bg-[#00FFB2]/2 rounded-full blur-2xl group-hover:bg-[#00FFB2]/5 transition-all duration-500"></div>
                 <span className="text-[10px] text-[#00FFB2] font-mono uppercase tracking-widest block mb-2">Total Registered Twins</span>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold font-dm text-white">1,248</span>
-                  <span className="text-xs text-[#00FFB2] font-mono leading-none">+12.4% MoM</span>
+                  <span className="text-3xl font-bold font-dm text-white">{totalTwins}</span>
+                  <span className="text-xs text-[#00FFB2] font-mono leading-none">Active Twins</span>
                 </div>
                 <p className="text-[10px] text-zinc-500 mt-2 font-mono">100% on-chain Sepolia NFT proof</p>
               </div>
@@ -763,8 +802,8 @@ export default function Dashboard() {
                 <div className="absolute right-0 top-0 w-24 h-24 bg-[#00FFB2]/2 rounded-full blur-2xl group-hover:bg-[#00FFB2]/5 transition-all duration-500"></div>
                 <span className="text-[10px] text-zinc-400 font-mono uppercase tracking-widest block mb-2">Escrow Locked Volume</span>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-bold font-dm text-white">Rp 4.85B</span>
-                  <span className="text-xs text-zinc-400 font-mono leading-none">16 escrows</span>
+                  <span className="text-2xl font-bold font-dm text-white">{formatVolume(lockedVolumeVal)}</span>
+                  <span className="text-xs text-zinc-400 font-mono leading-none">{activeEscrowsCount} escrows</span>
                 </div>
                 <p className="text-[10px] text-zinc-500 mt-2 font-mono">Midtrans transaction hold state</p>
               </div>
@@ -773,7 +812,7 @@ export default function Dashboard() {
                 <div className="absolute right-0 top-0 w-24 h-24 bg-[#00FFB2]/2 rounded-full blur-2xl group-hover:bg-[#00FFB2]/5 transition-all duration-500"></div>
                 <span className="text-[10px] text-zinc-400 font-mono uppercase tracking-widest block mb-2">P2P Handover Sessions</span>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold font-dm text-white">4</span>
+                  <span className="text-3xl font-bold font-dm text-white">{activeHandoversCount}</span>
                   <span className="text-xs text-[#00FFB2] font-mono leading-none">Active Sessions</span>
                 </div>
                 <p className="text-[10px] text-zinc-500 mt-2 font-mono">5-minute active TTL verification</p>
