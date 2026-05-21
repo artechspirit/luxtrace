@@ -18,7 +18,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.luxtracemobile"
+      "package": "com.anonymous.luxtracemobile",
+      "permissions": [
+        "android.permission.NFC"
+      ]
     },
     "web": {
       "output": "static",
@@ -47,6 +50,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a146f1e1-08d3-471d-bc52-bc8587ad2276"
+      }
     }
   }
 }

@@ -58,6 +58,9 @@ npx expo start --clear
 ```
 Pindai kode QR yang muncul di terminal menggunakan kamera ponsel Anda (untuk iOS) atau aplikasi Expo Go (untuk Android).
 
+> [!IMPORTANT]
+> Karena fitur NFC memerlukan modul native Android/iOS, fitur pemindaian NFC tidak dapat diuji menggunakan Expo Go standar. Untuk menguji pemindaian NFC, Anda harus mem-build aplikasi menjadi APK (untuk Android). Panduan lengkap langkah demi langkah build APK dapat dibaca di **[mobile_build_guide.md](./mobile_build_guide.md)**.
+
 ### 3. Kredensial Uji Coba Akun Pembeli (Mobile App)
 Gunakan akun ini untuk masuk ke aplikasi mobile:
 *   **Email**: `buyer@luxtrace.com` (atau `buyer2@luxtrace.com` untuk simulasi penerima P2P)
