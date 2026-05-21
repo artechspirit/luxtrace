@@ -77,7 +77,7 @@ export default function RootLayout() {
         router.replace('/');
       } else if (isOperatorRole && !inOperatorGroup && !inConsumerGroup && !isAuthCallback) {
         // Operator on root or unknown route → go to operator dashboard
-        if (segments[0] === undefined || segments[0] === '') {
+        if (segments[0] === undefined) {
           router.replace('/(operator)');
         }
       }
