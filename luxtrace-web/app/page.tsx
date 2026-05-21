@@ -111,8 +111,29 @@ export default function Login() {
           </div>
         </form>
 
+        {/* Quick Demo Login for Judges */}
+        <div className="mt-6 pt-5 border-t border-[#00FFB2]/10">
+          <p className="text-[9px] text-[#00FFB2] font-mono uppercase tracking-widest mb-2.5 text-center">
+            Demo Credentials (Click to Autofill)
+          </p>
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('admin@luxtrace.com')
+                setPassword('password123')
+              }}
+              className="w-full bg-black/60 border border-zinc-850 hover:border-[#00FFB2]/30 hover:bg-[#00FFB2]/5 rounded-lg p-2.5 text-center transition duration-200 cursor-pointer"
+            >
+              <div className="text-[10px] text-white font-bold uppercase tracking-wider">System Admin</div>
+              <div className="text-[9px] text-zinc-500 font-mono mt-0.5">admin@luxtrace.com</div>
+              <div className="text-[8px] text-[#00FFB2] font-mono mt-1">Role: ADMIN · Password: password123</div>
+            </button>
+          </div>
+        </div>
+
         {/* Footer info */}
-        <p className="text-[8px] text-zinc-600 font-mono text-center mt-6 uppercase tracking-wider">
+        <p className="text-[8px] text-zinc-600 font-mono text-center mt-4 uppercase tracking-wider">
           Secured by Supabase Auth & Thirdweb Engine
         </p>
 
