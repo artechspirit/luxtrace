@@ -293,6 +293,9 @@ export const paymentService = {
         );
         await transactionRepository.updateStatus(transactionId, "CANCELLED");
       } else {
+        // Move the transaction into the IN_TRANSIT phase so NFC verification can complete.
+        await transactionRepository.updateStatus(transactionId, "IN_TRANSIT");
+
         // Trigger push notifications
         notificationService
           .sendPushNotification(
