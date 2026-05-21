@@ -64,6 +64,7 @@ export default function TransactionDetailScreen() {
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingQr, setIsGeneratingQr] = useState(false)
   const [isSimulatingPayment, setIsSimulatingPayment] = useState(false)
+  const [isShipping, setIsShipping] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const fetchTransactionDetails = async () => {
@@ -140,7 +141,7 @@ export default function TransactionDetailScreen() {
       })
       const result = await response.json()
       if (response.ok && result.success) {
-        showAlert('Payment Simulated', 'Deposit completed successfully. Advanced to PAID / IN TRANSIT state.')
+        showAlert('Payment Simulated', 'Deposit completed successfully. Transaction is now PAID. Mark as shipped when ready.')
         fetchTransactionDetails()
       } else {
         throw new Error(result.message || 'Simulation failed.')
@@ -149,6 +150,30 @@ export default function TransactionDetailScreen() {
       showAlert('Payment Failed', err.message || 'Could not simulate payment.')
     } finally {
       setIsSimulatingPayment(false)
+    }
+  }
+
+  const handleMarkAsShipped = async () => {
+    if (!token || !id) return
+    setIsShipping(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/transactions/${id}/ship`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      const result = await response.json()
+      if (response.ok && result.success) {
+        showAlert('Shipment Confirmed', 'Transaction moved to IN_TRANSIT. Buyer may now verify NFC upon delivery.')
+        fetchTransactionDetails()
+      } else {
+        throw new Error(result.message || 'Failed to mark as shipped.')
+      }
+    } catch (err: any) {
+      showAlert('Shipment Update Failed', err.message || 'Could not update transaction status.')
+    } finally {
+      setIsShipping(false)
     }
   }
 
@@ -181,6 +206,13 @@ export default function TransactionDetailScreen() {
       hour: '2-digit',
       minute: '2-digit',
     })
+  }
+
+  const formatExpiry = (isoString: string) => {
+    if (isoString.startsWith('9999')) {
+      return 'No expiry — valid until used'
+    }
+    return formatDate(isoString)
   }
 
   if (isLoading) {
@@ -260,6 +292,27 @@ export default function TransactionDetailScreen() {
           </View>
         </View>
 
+        {!isBuyer && transaction.type === 'P2P_REMOTE_SHIPPING' && transaction.status === 'PAID' && (
+          <View style={styles.actionCard}>
+            <Ionicons name="send-outline" size={28} color="#00FFB2" style={{ alignSelf: 'center', marginBottom: 10 }} />
+            <Text style={styles.actionTitle}>ITEM READY TO SHIP</Text>
+            <Text style={styles.actionSubtext}>
+              Buyer has funded escrow. Mark the item as shipped to move the transaction into IN_TRANSIT and allow NFC verification on delivery.
+            </Text>
+            <TouchableOpacity
+              style={styles.payButton}
+              onPress={handleMarkAsShipped}
+              disabled={isShipping}
+            >
+              {isShipping ? (
+                <ActivityIndicator color="#0A0A0A" size="small" />
+              ) : (
+                <Text style={styles.payButtonText}>MARK AS SHIPPED</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Product Details Card */}
         <View style={styles.card}>
           <Text style={styles.cardHeader}>ASSET SPECIFICATIONS</Text>
@@ -312,7 +365,7 @@ export default function TransactionDetailScreen() {
             </TouchableOpacity>
 
             <Text style={styles.expiryText}>
-              Expires at: {formatDate(qrSession.expires_at)}
+              Expires at: {formatExpiry(qrSession.expires_at)}
             </Text>
           </View>
         ) : isGeneratingQr ? (
@@ -605,6 +658,29 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.05,
     shadowRadius: 15,
+  },
+  actionCard: {
+    backgroundColor: '#0d1614',
+    borderColor: 'rgba(0, 255, 178, 0.15)',
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+  },
+  actionTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  actionSubtext: {
+    color: '#a0aec0',
+    fontSize: 10,
+    textAlign: 'center',
+    lineHeight: 15,
+    marginBottom: 16,
   },
   qrIconWrapper: {
     width: 48,

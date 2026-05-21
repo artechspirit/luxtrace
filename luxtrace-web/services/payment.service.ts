@@ -277,15 +277,15 @@ export const paymentService = {
     if (!transaction)
       throw new Error("Transaction disappeared after PAID update");
 
-    // ── P2P Remote: lock product → buyer must still NFC verify ──────────────
+    // ── P2P Remote: lock product only, but do not mark shipped yet.
+    // The seller must explicitly mark the item as IN_TRANSIT once it has been sent.
     if (transaction.type === "P2P_REMOTE_SHIPPING") {
       const locked = await productRepository.updateStatus(
         transaction.product_id,
-        "IN_TRANSIT",
+        "OWNED",
         "OWNED",
       );
       if (!locked) {
-        // Product state changed concurrently — refund buyer
         await paymentService._refundOrder(
           orderId,
           transaction.amount_idr,
@@ -293,15 +293,13 @@ export const paymentService = {
         );
         await transactionRepository.updateStatus(transactionId, "CANCELLED");
       } else {
-        // Move the transaction into the IN_TRANSIT phase so NFC verification can complete.
-        await transactionRepository.updateStatus(transactionId, "IN_TRANSIT");
+        await transactionRepository.updateStatus(transactionId, "PAID");
 
-        // Trigger push notifications
         notificationService
           .sendPushNotification(
             transaction.seller_id!,
             "P2P Escrow Funded",
-            "The buyer has completed their deposit. Please prepare the product and present the handover QR.",
+            "The buyer has completed their deposit. Please prepare the product for shipping and mark it as in transit.",
           )
           .catch((err) =>
             console.error("Failed to notify seller of escrow funding:", err),
@@ -311,7 +309,7 @@ export const paymentService = {
           .sendPushNotification(
             transaction.buyer_id,
             "Payment Locked",
-            "Your payment is safely locked in escrow. Authenticate physical NFC upon arrival to complete.",
+            "Your payment is safely locked in escrow. The seller will mark the item in transit once it ships.",
           )
           .catch((err) =>
             console.error("Failed to notify buyer of payment lock:", err),

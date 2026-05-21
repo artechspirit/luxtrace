@@ -18,7 +18,7 @@ import { ok, err, unauthorized, serverError } from '@/lib/response'
  * {
  *   "qr_payload": "AES256_ENCRYPTED_BASE64",   ← display as QR code
  *   "session_id": "uuid",                       ← send to buyer separately (optional)
- *   "expires_at": "2026-05-19T05:15:00Z",      ← 15-minute TTL
+ *   "expires_at": "9999-12-31T23:59:59.999Z",   ← no automatic expiry for remote shipping
  *   "instructions": "..."
  * }
  *

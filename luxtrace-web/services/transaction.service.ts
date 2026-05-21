@@ -27,7 +27,7 @@ export const transactionService = {
     ) {
       try {
         const buyer = await profileRepository.findByUserId(tx.buyer_id);
-        const product = (tx as any).product;
+        const product = (tx as Transaction & { product?: { brand: string; name: string } }).product;
         if (buyer && product) {
           const orderId = tx.payment_ref || `LUX-${tx.transaction_id}`;
           const itemName = `${product.brand} — ${product.name}`;
@@ -230,7 +230,11 @@ export const transactionService = {
     }
 
     const { qr_payload, session_id, expires_at } =
-      await nfcService.generateQrPayload(transactionId, tx.product_id);
+      await nfcService.generateQrPayload(
+        transactionId,
+        tx.product_id,
+        tx.type === 'P2P_REMOTE_SHIPPING' ? null : undefined,
+      );
 
     return {
       qr_payload,
@@ -238,6 +242,74 @@ export const transactionService = {
       expires_at,
       instructions:
         "Show this QR to the buyer. They must scan this QR AND tap the NFC chip on the physical product to verify.",
+    };
+  },
+
+  async markP2PRemoteAsInTransit(
+    transactionId: string,
+    callerId: string,
+  ): Promise<{ transaction_id: string; status: string; product_status: string }> {
+    const tx = await transactionRepository.findById(transactionId);
+    if (!tx)
+      throw Object.assign(new Error("Transaction not found"), {
+        code: "NOT_FOUND",
+      });
+
+    if (tx.type !== "P2P_REMOTE_SHIPPING") {
+      throw Object.assign(
+        new Error("Only remote shipping transactions can be marked in transit"),
+        { code: "INVALID_TRANSACTION_TYPE" },
+      );
+    }
+
+    const callerProfile = await profileRepository.findByUserId(callerId);
+    const isPlatformStaff =
+      callerProfile &&
+      (callerProfile.role === "ADMIN" || callerProfile.role === "OPERATOR");
+
+    if (tx.seller_id !== callerId && !isPlatformStaff) {
+      throw Object.assign(new Error("Only the seller or platform staff can mark this transaction in transit"), {
+        code: "FORBIDDEN",
+      });
+    }
+
+    if (tx.status !== "PAID") {
+      throw Object.assign(
+        new Error("Transaction must be in PAID state before it can be marked IN_TRANSIT"),
+        { code: "INVALID_STATE" },
+      );
+    }
+
+    const product = await productRepository.findById(tx.product_id);
+    if (!product)
+      throw new Error("Data integrity error: missing product");
+
+    if (product.status !== "OWNED" && product.status !== "IN_TRANSIT") {
+      throw Object.assign(new Error("Product is not available for shipping"), {
+        code: "INVALID_PRODUCT_STATE",
+      });
+    }
+
+    if (product.status === "OWNED") {
+      const updatedProduct = await productRepository.updateStatus(
+        tx.product_id,
+        "IN_TRANSIT",
+        "OWNED",
+      );
+      if (!updatedProduct) {
+        throw Object.assign(
+          new Error("Failed to update product state to IN_TRANSIT"),
+          { code: "PRODUCT_STATE_CONFLICT" },
+        );
+      }
+    }
+
+    await transactionRepository.updateStatus(transactionId, "IN_TRANSIT");
+
+    return {
+      transaction_id: transactionId,
+      status: "IN_TRANSIT",
+      product_status: "IN_TRANSIT",
     };
   },
 
@@ -303,12 +375,13 @@ export const transactionService = {
       });
     }
 
-    const product = await productRepository.findById(productId);
-    if (!product) throw new Error("Data integrity error: missing product");
+    const productRecord = await productRepository.findById(productId);
+    if (!productRecord)
+      throw new Error("Data integrity error: missing product");
 
     // ── Step 4: Transaction must be IN_TRANSIT ───────────────────────────────
     if (tx.status === "PAID") {
-      if (product.status === "IN_TRANSIT") {
+      if (productRecord.status === "IN_TRANSIT") {
         await transactionRepository.updateStatus(transactionId, "IN_TRANSIT");
       } else {
         throw Object.assign(
@@ -369,15 +442,15 @@ export const transactionService = {
     // ── Step 7: Load parties ──────────────────────────────────────────────────
     const seller = await profileRepository.findByUserId(tx.seller_id!);
     const buyer = await profileRepository.findByUserId(tx.buyer_id);
-    const product = await productRepository.findById(productId);
+    const productEntity = await productRepository.findById(productId);
 
-    if (!seller || !buyer || !product) {
+    if (!seller || !buyer || !productEntity) {
       throw new Error(
         "Data integrity error: missing seller, buyer, or product",
       );
     }
 
-    if (!product.nft_token_id) {
+    if (!productEntity.nft_token_id) {
       throw new Error(
         `Product ${productId} has no NFT token — cannot transfer`,
       );
@@ -389,7 +462,7 @@ export const transactionService = {
       const result = await blockchainService.transferNFT(
         seller.wallet_address,
         buyer.wallet_address,
-        product.nft_token_id,
+        productEntity.nft_token_id,
       );
       txHash = result.tx_hash;
     } catch (nftErr) {
@@ -470,7 +543,7 @@ export const transactionService = {
         tx_hash: txHash,
         from_wallet: seller.wallet_address,
         to_wallet: buyer.wallet_address,
-        token_id: product.nft_token_id!,
+        token_id: productEntity.nft_token_id!,
       },
       escrow_released: true,
       product_status: "OWNED",

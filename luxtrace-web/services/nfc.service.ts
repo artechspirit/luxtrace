@@ -5,8 +5,8 @@ import { v4 as uuidv4 } from 'uuid'
 import type { NfcTag } from '@/types'
 import crypto from 'crypto'
 
-// QR session TTL: 15 minutes for remote shipping (needs time for delivery handover)
 const QR_SESSION_TTL_MS = 15 * 60 * 1000
+const NO_EXPIRY_ISO = '9999-12-31T23:59:59.999Z'
 
 export const nfcService = {
   /**
@@ -87,7 +87,7 @@ export const nfcService = {
   async generateQrPayload(
     transactionId: string,
     productId: string,
-    ttlMs: number = QR_SESSION_TTL_MS
+    ttlMs: number | null = QR_SESSION_TTL_MS
   ): Promise<{ qr_payload: string; session_id: string; expires_at: string }> {
     const tag = await nfcRepository.findByProductId(productId)
     if (!tag) {
@@ -98,7 +98,10 @@ export const nfcService = {
     }
 
     const sessionId = uuidv4()
-    const expiresAt = new Date(Date.now() + ttlMs)
+    const expiresAt =
+      ttlMs === null
+        ? new Date(NO_EXPIRY_ISO)
+        : new Date(Date.now() + ttlMs)
 
     const plainPayload = {
       v: 1,
