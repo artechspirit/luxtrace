@@ -1,41 +1,57 @@
-import Midtrans from 'midtrans-client'
-import crypto from 'crypto'
+import Midtrans from "midtrans-client";
+import crypto from "crypto";
 
-const serverKey = process.env.MIDTRANS_SERVER_KEY || 'placeholder-server-key'
-const clientKey = process.env.MIDTRANS_CLIENT_KEY || 'placeholder-client-key'
-const isProduction = process.env.NODE_ENV === 'production'
+const serverKey = process.env.MIDTRANS_SERVER_KEY || "placeholder-server-key";
+const clientKey = process.env.MIDTRANS_CLIENT_KEY || "placeholder-client-key";
+const midtransEnv = process.env.MIDTRANS_ENV?.toLowerCase();
+const isProduction =
+  midtransEnv === "production" ||
+  (midtransEnv === undefined && process.env.NODE_ENV === "production");
 
-if ((!process.env.MIDTRANS_SERVER_KEY || !process.env.MIDTRANS_CLIENT_KEY) && process.env.NEXT_PHASE !== 'phase-production-build') {
-  throw new Error('[ENV] MIDTRANS_SERVER_KEY and MIDTRANS_CLIENT_KEY are required')
+if (
+  (!process.env.MIDTRANS_SERVER_KEY || !process.env.MIDTRANS_CLIENT_KEY) &&
+  process.env.NEXT_PHASE !== "phase-production-build"
+) {
+  throw new Error(
+    "[ENV] MIDTRANS_SERVER_KEY and MIDTRANS_CLIENT_KEY are required",
+  );
 }
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 
-export const snap = new Midtrans.Snap({ isProduction, serverKey, clientKey })
-export const coreApi = new Midtrans.CoreApi({ isProduction, serverKey, clientKey })
+export const snap = new Midtrans.Snap({ isProduction, serverKey, clientKey });
+export const coreApi = new Midtrans.CoreApi({
+  isProduction,
+  serverKey,
+  clientKey,
+});
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type MidtransPaymentMethod = 'snap' | 'bank_transfer' | 'qris' | 'echannel'
+export type MidtransPaymentMethod =
+  | "snap"
+  | "bank_transfer"
+  | "qris"
+  | "echannel";
 
 export interface SnapInvoiceResult {
-  token: string
-  redirect_url: string
+  token: string;
+  redirect_url: string;
 }
 
 export interface MidtransTransactionStatus {
-  transaction_id: string
-  order_id: string
-  transaction_status: string
-  payment_type: string
-  gross_amount: string
-  status_code: string
-  fraud_status?: string
-  bank?: string
-  va_numbers?: Array<{ bank: string; va_number: string }>
-  payment_amounts?: Array<{ paid_at: string; amount: string }>
-  transaction_time: string
-  settlement_time?: string
+  transaction_id: string;
+  order_id: string;
+  transaction_status: string;
+  payment_type: string;
+  gross_amount: string;
+  status_code: string;
+  fraud_status?: string;
+  bank?: string;
+  va_numbers?: Array<{ bank: string; va_number: string }>;
+  payment_amounts?: Array<{ paid_at: string; amount: string }>;
+  transaction_time: string;
+  settlement_time?: string;
 }
 
 // ─── Signature Validation ─────────────────────────────────────────────────────
@@ -50,41 +66,41 @@ export function validateMidtransSignature(
   orderId: string,
   statusCode: string,
   grossAmount: string,
-  receivedSignature: string
+  receivedSignature: string,
 ): boolean {
   // Guard: signature must be exactly 128 hex chars (SHA512)
-  if (receivedSignature.length !== 128) return false
+  if (receivedSignature.length !== 128) return false;
 
   const expected = crypto
-    .createHash('sha512')
+    .createHash("sha512")
     .update(`${orderId}${statusCode}${grossAmount}${serverKey}`)
-    .digest('hex')
+    .digest("hex");
 
   try {
     return crypto.timingSafeEqual(
-      Buffer.from(expected, 'hex'),
-      Buffer.from(receivedSignature, 'hex')
-    )
+      Buffer.from(expected, "hex"),
+      Buffer.from(receivedSignature, "hex"),
+    );
   } catch {
     // Buffer length mismatch → invalid
-    return false
+    return false;
   }
 }
 
 // ─── Invoice Creation ─────────────────────────────────────────────────────────
 
 export interface CreateSnapInvoiceParams {
-  orderId: string
-  amountIdr: number
-  customerName: string
-  customerEmail: string
-  itemId: string
-  itemName: string
+  orderId: string;
+  amountIdr: number;
+  customerName: string;
+  customerEmail: string;
+  itemId: string;
+  itemName: string;
   /**
    * Optional: restrict payment methods shown in Snap popup.
    * Default: all methods enabled (QRIS, VA, etc.)
    */
-  enabledPayments?: string[]
+  enabledPayments?: string[];
 }
 
 /**
@@ -92,7 +108,7 @@ export interface CreateSnapInvoiceParams {
  * Returns a token (for Snap.js embed) and a redirect_url (for webview).
  */
 export async function createSnapInvoice(
-  params: CreateSnapInvoiceParams
+  params: CreateSnapInvoiceParams,
 ): Promise<SnapInvoiceResult> {
   const {
     orderId,
@@ -102,7 +118,7 @@ export async function createSnapInvoice(
     itemId,
     itemName,
     enabledPayments,
-  } = params
+  } = params;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await (snap as any).createTransaction({
@@ -128,9 +144,9 @@ export async function createSnapInvoice(
       unfinish: `${process.env.NEXT_PUBLIC_APP_URL}/payment/unfinish`,
       error: `${process.env.NEXT_PUBLIC_APP_URL}/payment/error`,
     },
-  })
+  });
 
-  return result as SnapInvoiceResult
+  return result as SnapInvoiceResult;
 }
 
 // ─── Transaction Status ───────────────────────────────────────────────────────
@@ -140,19 +156,19 @@ export async function createSnapInvoice(
  * Used for polling fallback when webhook is not received.
  */
 export async function getMidtransTransactionStatus(
-  orderId: string
+  orderId: string,
 ): Promise<MidtransTransactionStatus> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await (coreApi as any).transaction.status(orderId)
-  return result as MidtransTransactionStatus
+  const result = await (coreApi as any).transaction.status(orderId);
+  return result as MidtransTransactionStatus;
 }
 
 // ─── Refund ───────────────────────────────────────────────────────────────────
 
 export interface RefundParams {
-  orderId: string
-  amountIdr: number
-  reason: string
+  orderId: string;
+  amountIdr: number;
+  reason: string;
 }
 
 /**
@@ -160,13 +176,13 @@ export interface RefundParams {
  * Used when escrow release fails after payment settlement.
  */
 export async function refundTransaction(params: RefundParams): Promise<void> {
-  const { orderId, amountIdr, reason } = params
+  const { orderId, amountIdr, reason } = params;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (coreApi as any).transaction.refund(orderId, {
     refund_amount: amountIdr,
     reason,
-  })
+  });
 }
 
 // ─── Cancellation ─────────────────────────────────────────────────────────────
@@ -177,5 +193,5 @@ export async function refundTransaction(params: RefundParams): Promise<void> {
  */
 export async function cancelTransaction(orderId: string): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (coreApi as any).transaction.cancel(orderId)
+  await (coreApi as any).transaction.cancel(orderId);
 }

@@ -34,12 +34,14 @@ echo "=== STEP 3: Pushing Docker Image ==="
 docker push "$IMAGE_NAME:latest"
 
 echo "=== STEP 4: Deploying to Google Cloud Run ==="
-# We update the image. Cloud Run automatically retains all existing environment variables
-# that were previously set on the service.
+# Build an explicit env var list from .env so Cloud Run receives the same runtime values
+ENV_VARS=$(grep -v '^\s*#' "$WEB_DIR/.env" | sed '/^\s*$/d' | tr '\n' ',' | sed 's/,$//')
+
 gcloud run deploy "$SERVICE_NAME" \
   --image="$IMAGE_NAME:latest" \
   --region="$REGION" \
-  --platform="managed"
+  --platform="managed" \
+  --set-env-vars "$ENV_VARS"
 
 echo "=== DEPLOYMENT COMPLETE! ==="
 echo "Live URL: $NEXT_PUBLIC_APP_URL"
