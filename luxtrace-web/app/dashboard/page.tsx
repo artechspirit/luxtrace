@@ -213,6 +213,17 @@ export default function Dashboard() {
     })
   }
 
+  // Pagination states
+  const [dashboardPage, setDashboardPage] = useState(1)
+  const [productsPage, setProductsPage] = useState(1)
+  const [escrowsPage, setEscrowsPage] = useState(1)
+  const ITEMS_PER_PAGE = 5
+
+  // Reset registry pagination when filters change
+  useEffect(() => {
+    setProductsPage(1)
+  }, [searchQuery, productStatusFilter])
+
   // Load real data from REST endpoints if authenticated
   useEffect(() => {
     const token = localStorage.getItem('luxtrace_token')
@@ -924,7 +935,7 @@ export default function Dashboard() {
             {/* Split view: operations list & timeline */}
             <div className="grid grid-cols-5 gap-6">
               {/* Operations list */}
-              <div className="luxury-card rounded-xl p-6 col-span-3">
+              <div className="luxury-card rounded-xl p-6 col-span-3 h-fit self-start">
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h3 className="text-xs font-bold font-dm uppercase tracking-widest text-white">Twin Transactions</h3>
@@ -947,7 +958,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {transactions.map((tx) => (
+                      {transactions.slice((dashboardPage - 1) * ITEMS_PER_PAGE, dashboardPage * ITEMS_PER_PAGE).map((tx) => (
                         <tr 
                           key={tx.id} 
                           className="hover:bg-white/2 cursor-pointer transition duration-150 group"
@@ -981,6 +992,30 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
+
+                {transactions.length > ITEMS_PER_PAGE && (
+                  <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4">
+                    <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                      Showing {Math.min(transactions.length, (dashboardPage - 1) * ITEMS_PER_PAGE + 1)}-{Math.min(transactions.length, dashboardPage * ITEMS_PER_PAGE)} of {transactions.length} items
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        disabled={dashboardPage === 1}
+                        onClick={() => setDashboardPage(prev => prev - 1)}
+                        className="px-3 py-1 bg-black/40 hover:bg-[#00FFB2]/10 border border-[#00FFB2]/10 hover:border-[#00FFB2]/30 disabled:border-white/5 disabled:hover:bg-transparent disabled:opacity-30 rounded text-[9px] font-mono text-[#00FFB2] disabled:text-zinc-500 transition uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        disabled={dashboardPage >= Math.ceil(transactions.length / ITEMS_PER_PAGE)}
+                        onClick={() => setDashboardPage(prev => prev + 1)}
+                        className="px-3 py-1 bg-black/40 hover:bg-[#00FFB2]/10 border border-[#00FFB2]/10 hover:border-[#00FFB2]/30 disabled:border-white/5 disabled:hover:bg-transparent disabled:opacity-30 rounded text-[9px] font-mono text-[#00FFB2] disabled:text-zinc-500 transition uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Provenance Explorer */}
@@ -1084,7 +1119,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-3 gap-8">
             
             {/* Products registry list (2/3 columns) */}
-            <div className="luxury-card rounded-xl p-6 col-span-2 space-y-6">
+            <div className="luxury-card rounded-xl p-6 col-span-2 space-y-6 h-fit self-start">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4">
                   <h3 className="text-sm font-bold font-dm uppercase tracking-widest text-white">Registered Twins</h3>
@@ -1131,12 +1166,12 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {filteredProducts.map((p) => (
+                    {filteredProducts.slice((productsPage - 1) * ITEMS_PER_PAGE, productsPage * ITEMS_PER_PAGE).map((p) => (
                       <tr 
                         key={p.product_id}
                         onClick={() => setSelectedProduct(p)}
                         className={`hover:bg-white/2 cursor-pointer transition duration-150 ${
-                          selectedProduct.product_id === p.product_id ? 'bg-white/2 border-l border-[#00FFB2]' : ''
+                          selectedProduct && selectedProduct.product_id === p.product_id ? 'bg-white/2 border-l border-[#00FFB2]' : ''
                         }`}
                       >
                         <td className="py-4 px-2 text-white font-medium">
@@ -1165,6 +1200,30 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               </div>
+
+              {filteredProducts.length > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4">
+                  <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                    Showing {Math.min(filteredProducts.length, (productsPage - 1) * ITEMS_PER_PAGE + 1)}-{Math.min(filteredProducts.length, productsPage * ITEMS_PER_PAGE)} of {filteredProducts.length} items
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={productsPage === 1}
+                      onClick={() => setProductsPage(prev => prev - 1)}
+                      className="px-3 py-1 bg-black/40 hover:bg-[#00FFB2]/10 border border-[#00FFB2]/10 hover:border-[#00FFB2]/30 disabled:border-white/5 disabled:hover:bg-transparent disabled:opacity-30 rounded text-[9px] font-mono text-[#00FFB2] disabled:text-zinc-500 transition uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      disabled={productsPage >= Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)}
+                      onClick={() => setProductsPage(prev => prev + 1)}
+                      className="px-3 py-1 bg-black/40 hover:bg-[#00FFB2]/10 border border-[#00FFB2]/10 hover:border-[#00FFB2]/30 disabled:border-white/5 disabled:hover:bg-transparent disabled:opacity-30 rounded text-[9px] font-mono text-[#00FFB2] disabled:text-zinc-500 transition uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Product Twin detailed properties inspection (1/3 columns) */}
@@ -1320,7 +1379,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {transactions.map(tx => (
+                    {transactions.slice((escrowsPage - 1) * ITEMS_PER_PAGE, escrowsPage * ITEMS_PER_PAGE).map(tx => (
                       <tr key={tx.id} className="hover:bg-white/2 transition">
                         <td className="py-4 px-2 font-mono text-[#00FFB2]">{tx.id}</td>
                         <td className="py-4 px-2 text-white font-medium">
@@ -1383,6 +1442,30 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               </div>
+
+              {transactions.length > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-4">
+                  <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                    Showing {Math.min(transactions.length, (escrowsPage - 1) * ITEMS_PER_PAGE + 1)}-{Math.min(transactions.length, escrowsPage * ITEMS_PER_PAGE)} of {transactions.length} items
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={escrowsPage === 1}
+                      onClick={() => setEscrowsPage(prev => prev - 1)}
+                      className="px-3 py-1 bg-black/40 hover:bg-[#00FFB2]/10 border border-[#00FFB2]/10 hover:border-[#00FFB2]/30 disabled:border-white/5 disabled:hover:bg-transparent disabled:opacity-30 rounded text-[9px] font-mono text-[#00FFB2] disabled:text-zinc-500 transition uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      disabled={escrowsPage >= Math.ceil(transactions.length / ITEMS_PER_PAGE)}
+                      onClick={() => setEscrowsPage(prev => prev + 1)}
+                      className="px-3 py-1 bg-black/40 hover:bg-[#00FFB2]/10 border border-[#00FFB2]/10 hover:border-[#00FFB2]/30 disabled:border-white/5 disabled:hover:bg-transparent disabled:opacity-30 rounded text-[9px] font-mono text-[#00FFB2] disabled:text-zinc-500 transition uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>

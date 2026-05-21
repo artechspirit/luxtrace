@@ -21,6 +21,10 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
 
+  // Only OPERATOR or ADMIN roles get operator access — never treat undefined/null as operator
+  const isOperator = (role: string | null | undefined) =>
+    role === 'OPERATOR' || role === 'ADMIN';
+
   const [fontsLoaded] = useFonts({
     'PlusJakartaSans-Regular': PlusJakartaSans_400Regular,
     'PlusJakartaSans-Medium': PlusJakartaSans_500Medium,
@@ -54,16 +58,16 @@ export default function RootLayout() {
       router.replace('/(auth)/login');
     } else if (isAuthenticated && inAuthGroup) {
       // Logged in but on auth screen → route by role
-      const role = (useAuthStore.getState().user?.role) ?? 'CONSUMER';
-      if (role === 'OPERATOR' || role === 'ADMIN') {
+      const role = useAuthStore.getState().user?.role;
+      if (isOperator(role)) {
         router.replace('/(operator)');
       } else {
         router.replace('/');
       }
     } else if (isAuthenticated && !inAuthGroup && !isAuthCallback) {
       // Logged in — enforce role-based group access
-      const role = (useAuthStore.getState().user?.role) ?? 'CONSUMER';
-      const isOperatorRole = role === 'OPERATOR' || role === 'ADMIN';
+      const role = useAuthStore.getState().user?.role;
+      const isOperatorRole = isOperator(role);
 
       if (isOperatorRole && inConsumerGroup) {
         // Operator accidentally in consumer group → redirect to operator
@@ -71,7 +75,7 @@ export default function RootLayout() {
       } else if (!isOperatorRole && inOperatorGroup) {
         // Consumer accidentally in operator group → redirect to consumer
         router.replace('/');
-      } else if (isOperatorRole && !inOperatorGroup && !isAuthCallback) {
+      } else if (isOperatorRole && !inOperatorGroup && !inConsumerGroup && !isAuthCallback) {
         // Operator on root or unknown route → go to operator dashboard
         if (segments[0] === undefined || segments[0] === '') {
           router.replace('/(operator)');

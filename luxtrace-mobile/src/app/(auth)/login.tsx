@@ -52,11 +52,22 @@ export default function LoginScreen() {
     clearError()
   }, [])
 
+  // Helper: redirect to the correct screen based on role
+  const redirectByRole = (role: string | undefined) => {
+    if (role === 'OPERATOR' || role === 'ADMIN') {
+      router.replace('/(operator)')
+    } else {
+      router.replace('/')
+    }
+  }
+
   // Sync animation finish with login resolution to avoid premature routing
   useEffect(() => {
     if (loaderFinished && pendingSession) {
       setIsLuxuryLoading(false)
-      setSession(pendingSession.token, pendingSession.user)
+      setSession(pendingSession.token, pendingSession.user).then(() => {
+        redirectByRole(pendingSession.user?.role)
+      })
     }
   }, [loaderFinished, pendingSession])
 
@@ -122,7 +133,7 @@ export default function LoginScreen() {
   useEffect(() => {
     if (isAuthenticated && user) {
       if (user.role === 'ADMIN' || user.role === 'OPERATOR') {
-        router.replace('/explore')
+        router.replace('/(operator)')
       } else {
         router.replace('/')
       }

@@ -31,14 +31,25 @@ export default function AuthCallbackScreen() {
   
   const authenticatingRef = useRef(false)
 
+  // Helper: redirect to the correct screen based on role
+  const redirectByRole = (role: string | undefined) => {
+    if (role === 'OPERATOR' || role === 'ADMIN') {
+      console.log('[AuthCallback] Role is', role, '→ redirecting to /(operator)')
+      router.replace('/(operator)')
+    } else {
+      console.log('[AuthCallback] Role is', role, '→ redirecting to /')
+      router.replace('/')
+    }
+  }
+
   // Sync animation finish with login resolution to avoid premature routing
   useEffect(() => {
     console.log('[AuthCallback] Sync effect check - loaderFinished:', loaderFinished, 'pendingSession:', !!pendingSession)
     if (loaderFinished && pendingSession) {
       console.log('[AuthCallback] Conditions met, calling setSession...')
       setSession(pendingSession.token, pendingSession.user).then(() => {
-        console.log('[AuthCallback] setSession complete, replacing route with "/"')
-        router.replace('/')
+        console.log('[AuthCallback] setSession complete')
+        redirectByRole(pendingSession.user?.role)
       }).catch(err => {
         console.error('[AuthCallback] Error setting session:', err)
       })
@@ -109,7 +120,7 @@ export default function AuthCallbackScreen() {
           } else {
             setIsApiLoading(false)
             await setSession(access_token, userData)
-            router.replace('/')
+            redirectByRole(userData.role)
           }
         } else if (accessToken) {
           console.log('[AuthCallback] Validating implicit access token with backend...')
@@ -129,7 +140,7 @@ export default function AuthCallbackScreen() {
           console.log('[AuthCallback] Profile fetch success, userData:', result.data)
           setIsApiLoading(false)
           await setSession(accessToken, result.data)
-          router.replace('/')
+          redirectByRole(result.data?.role)
         }
       } catch (err: any) {
         console.error('[OAuth Callback Error]', err)
