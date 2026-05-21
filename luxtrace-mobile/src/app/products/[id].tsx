@@ -17,6 +17,8 @@ import { API_BASE_URL } from '@/constants/config'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/stores/authStore'
 import { useAlertStore } from '@/stores/alertStore'
+import QRCode from 'react-native-qrcode-svg'
+import Ionicons from '@expo/vector-icons/Ionicons'
 
 interface TimelineEvent {
   log_id: string
@@ -53,6 +55,7 @@ export default function ProductProvenanceScreen() {
   const [agreedPrice, setAgreedPrice] = useState('')
   const [buyerEmail, setBuyerEmail] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [directQrSessionId, setDirectQrSessionId] = useState<string | null>(null)
 
   const checkOwnership = async () => {
     if (!token || !id) return
@@ -135,45 +138,29 @@ export default function ProductProvenanceScreen() {
       }
 
       // Success
-      showAlert(
-        'TRANSACTION INITIATED',
-        transferMode === 'remote'
-          ? `Remote shipping P2P Escrow initialized!\n\nMidtrans Snap URL generated. The buyer must pay the escrow to lock the transaction.`
-          : `Direct handover initialized successfully!\n\nSession ID: ${result.data?.session_id}\n\n(The Session ID has been automatically copied to your clipboard!)`,
-        transferMode === 'remote' ? [
-          {
-            text: 'OK',
-            onPress: () => {
-              setIsModalOpen(false)
-              setBuyerEmail('')
-              setAgreedPrice('')
-              fetchProvenance() // Refresh provenance history
-            }
-          }
-        ] : [
-          {
-            text: 'Copy ID',
-            onPress: () => {
-              if (result.data?.session_id) {
-                Clipboard.setString(result.data.session_id)
+      if (transferMode === 'direct' && result.data?.session_id) {
+        setDirectQrSessionId(result.data.session_id)
+        setIsModalOpen(false)
+        setBuyerEmail('')
+        setAgreedPrice('')
+        fetchProvenance()
+      } else {
+        showAlert(
+          'TRANSACTION INITIATED',
+          `Remote shipping P2P Escrow initialized!\n\nMidtrans Snap URL generated. The buyer must pay the escrow to lock the transaction.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setIsModalOpen(false)
+                setBuyerEmail('')
+                setAgreedPrice('')
+                fetchProvenance() // Refresh provenance history
               }
-              setIsModalOpen(false)
-              setBuyerEmail('')
-              setAgreedPrice('')
-              fetchProvenance()
             }
-          },
-          {
-            text: 'OK',
-            onPress: () => {
-              setIsModalOpen(false)
-              setBuyerEmail('')
-              setAgreedPrice('')
-              fetchProvenance()
-            }
-          }
-        ]
-      )
+          ]
+        )
+      }
     } catch (err: any) {
       showAlert('Listing Failed', err.message || 'Failed to initialize P2P Listing.')
     } finally {
@@ -516,6 +503,72 @@ export default function ProductProvenanceScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Direct Handover QR Modal */}
+      <Modal
+        visible={!!directQrSessionId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDirectQrSessionId(null)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/85 px-6">
+          <View 
+            className="bg-[#111111] border border-[#00FFB2]/20 rounded-[24px] p-6 w-full max-w-sm items-center"
+            style={{
+              shadowColor: '#00FFB2',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+          >
+            <View className="w-12 h-12 rounded-full bg-[#00FFB2]/10 border border-[#00FFB2]/20 flex items-center justify-center mb-3">
+              <Ionicons name="swap-horizontal" size={24} color="#00FFB2" />
+            </View>
+
+            <Text className="text-[#00FFB2] text-[10px] font-jakarta-bold tracking-[3px] uppercase mb-1">Direct Handover</Text>
+            <Text className="text-white text-base font-jakarta-bold text-center">SCAN QR SESSION</Text>
+            <Text className="text-[#718096] text-[10px] font-jakarta text-center mt-1 mb-6">
+              Buyer scans this to initiate the physical proximity NFC scan.
+            </Text>
+
+            {directQrSessionId && (
+              <View className="bg-white p-4 rounded-2xl mb-6 shadow-lg shadow-[#00FFB2]/10">
+                <QRCode
+                  value={JSON.stringify({ session_id: directQrSessionId })}
+                  size={200}
+                  backgroundColor="white"
+                  color="black"
+                />
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={() => {
+                if (directQrSessionId) {
+                  Clipboard.setString(directQrSessionId)
+                  showAlert('Copied', 'Session ID copied to clipboard.')
+                }
+              }}
+              className="bg-[#141e1c]/40 border border-[#00FFB2]/20 rounded-xl px-4 py-2.5 mb-4 flex-row items-center gap-1.5"
+            >
+              <Ionicons name="copy-outline" size={12} color="#00FFB2" />
+              <Text className="text-white text-[10px] font-mono select-all">
+                {directQrSessionId ? `${directQrSessionId.slice(0, 8)}...${directQrSessionId.slice(-8)}` : ''}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setDirectQrSessionId(null)}
+              className="bg-[#00FFB2] w-full h-11 rounded-xl items-center justify-center active:opacity-90 shadow-md shadow-[#00FFB2]/20"
+            >
+              <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px] uppercase">
+                DISMISS
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   )

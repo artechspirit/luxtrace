@@ -9,6 +9,7 @@ import {
   StatusBar,
   Platform,
   KeyboardAvoidingView,
+  Dimensions,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -16,6 +17,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useAlertStore } from '@/stores/alertStore'
 import { API_BASE_URL } from '@/constants/config'
 import Ionicons from '@expo/vector-icons/Ionicons'
+import QRCode from 'react-native-qrcode-svg'
 
 interface BoutiqueProduct {
   product_id: string
@@ -33,8 +35,11 @@ interface SaleResult {
   buyer: { full_name: string | null; email: string | null }
   amount_idr: number
   payment_url: string
+  snap_token?: string
   expires_at: string
 }
+
+const SCREEN_WIDTH = Dimensions.get('window').width
 
 export default function SellScreen() {
   const router = useRouter()
@@ -145,6 +150,9 @@ export default function SellScreen() {
 
   // ── SUCCESS STATE ──────────────────────────────────────────────────────────
   if (saleResult) {
+    const qrSize = SCREEN_WIDTH - 48 - 80 // screen minus padding minus card padding
+    const hasPaymentUrl = !!saleResult.payment_url
+
     return (
       <ScrollView
         className="flex-1 bg-[#0A0A0A]"
@@ -164,7 +172,7 @@ export default function SellScreen() {
             SALE INITIATED
           </Text>
           <Text className="text-white text-base font-jakarta-bold mb-4 text-center">
-            Invoice Sent to Buyer
+            Invoice Ready
           </Text>
 
           <View className="flex-row justify-between mb-3 border-b border-white/5 pb-3">
@@ -185,16 +193,48 @@ export default function SellScreen() {
             <Text className="text-[#718096] text-[10px] font-jakarta-bold tracking-wider">AMOUNT</Text>
             <Text className="text-[#C9A84C] text-[10px] font-jakarta-bold">{formatPrice(saleResult.amount_idr)}</Text>
           </View>
-          <View className="flex-row justify-between mb-5">
+          <View className="flex-row justify-between mb-5 border-b border-white/5 pb-4">
             <Text className="text-[#718096] text-[10px] font-jakarta-bold tracking-wider">ORDER ID</Text>
             <Text className="text-[#a0aec0] text-[10px] font-jakarta">{saleResult.order_id}</Text>
           </View>
 
-          <View className="bg-[#C9A84C]/8 border border-[#C9A84C]/15 rounded-xl p-4 mb-5">
-            <Text className="text-[#a0aec0] text-xs font-jakarta leading-relaxed">
-              📱 The buyer has received a push notification with their payment link. Once they pay, the digital twin NFT will transfer to their wallet automatically.
-            </Text>
-          </View>
+          {/* ── QR CODE PAYMENT SECTION ─────────────────────────────────── */}
+          {hasPaymentUrl ? (
+            <View className="items-center mb-5">
+              <Text className="text-[#C9A84C] text-[10px] font-jakarta-bold tracking-[2px] mb-3 text-center">
+                📲 SCAN TO PAY · BUYER SCANS THIS QR
+              </Text>
+              <View
+                style={{
+                  padding: 16,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  shadowColor: '#C9A84C',
+                  shadowOpacity: 0.25,
+                  shadowRadius: 20,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 8,
+                }}
+              >
+                <QRCode
+                  value={saleResult.payment_url}
+                  size={Math.min(qrSize, 220)}
+                  color="#0A0A0A"
+                  backgroundColor="#FFFFFF"
+                  quietZone={8}
+                />
+              </View>
+              <Text className="text-[#718096] text-[9px] font-jakarta text-center mt-3 leading-relaxed">
+                Buyer scans this code to open Midtrans payment page{`\n`}NFT transfers automatically after payment.
+              </Text>
+            </View>
+          ) : (
+            <View className="bg-[#C9A84C]/8 border border-[#C9A84C]/15 rounded-xl p-4 mb-5">
+              <Text className="text-[#a0aec0] text-xs font-jakarta leading-relaxed">
+                📱 Buyer has received a push notification with their payment link. Once they pay, the digital twin NFT will transfer to their wallet automatically.
+              </Text>
+            </View>
+          )}
 
           <TouchableOpacity
             className="bg-[#C9A84C] rounded-xl h-11 items-center justify-center mb-3 shadow-md"

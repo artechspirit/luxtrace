@@ -1,10 +1,11 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Loader from '@/components/Loader'
 import Alert from '@/components/Alert'
 import { withMinimumDelay } from '@/lib/loader-helper'
+import QRCode from 'qrcode'
 
 // ─── DATA SEEDING ─────────────────────────────────────────────────────────────
 const INITIAL_PRODUCTS = [
@@ -146,9 +147,18 @@ export default function Dashboard() {
   const [transactions, setTransactions] = useState<any[]>([])
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'products' | 'transactions'
+  const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'products' | 'transactions' | 'boutique'
   const [productStatusFilter, setProductStatusFilter] = useState('ALL')
   const [adminUser, setAdminUser] = useState<any | null>(null)
+
+  // ─── BOUTIQUE SELL STATE ───────────────────────────────────────────────────
+  const [boutiqueProducts, setBoutiqueProducts] = useState<any[]>([])
+  const [boutiqueSearch, setBoutiqueSearch] = useState('')
+  const [selectedBoutiqueProduct, setSelectedBoutiqueProduct] = useState<any | null>(null)
+  const [boutiqueBuyerEmail, setBoutiqueBuyerEmail] = useState('')
+  const [isBoutiqueSubmitting, setIsBoutiqueSubmitting] = useState(false)
+  const [isBoutiqueLoadingProducts, setIsBoutiqueLoadingProducts] = useState(false)
+  const [qrModal, setQrModal] = useState<{ isOpen: boolean; qrDataUrl: string; saleResult: any | null }>({ isOpen: false, qrDataUrl: '', saleResult: null })
 
   // Dynamic KPIs calculations from active state
   const totalTwins = products.length
@@ -170,7 +180,7 @@ export default function Dashboard() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const tabParam = params.get('tab')
-      if (tabParam && ['dashboard', 'products', 'transactions'].includes(tabParam)) {
+      if (tabParam && ['dashboard', 'products', 'transactions', 'boutique'].includes(tabParam)) {
         setActiveTab(tabParam)
       }
     }
@@ -183,6 +193,10 @@ export default function Dashboard() {
       const url = new URL(window.location.href)
       url.searchParams.set('tab', tab)
       window.history.pushState({}, '', url.toString())
+    }
+    // Fetch boutique products when switching to boutique tab
+    if (tab === 'boutique') {
+      fetchBoutiqueProducts()
     }
   }
 
@@ -401,6 +415,86 @@ export default function Dashboard() {
     } catch (e) {
       console.warn('[Dashboard] Failed to refresh data:', e)
     }
+  }
+
+  // ─── BOUTIQUE SELL HANDLERS ───────────────────────────────────────────────
+  const fetchBoutiqueProducts = useCallback(async () => {
+    const token = localStorage.getItem('luxtrace_token')
+    if (!token) return
+    setIsBoutiqueLoadingProducts(true)
+    try {
+      const res = await fetch('/api/boutique/products?limit=100', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const json = await res.json()
+      if (json.success) {
+        setBoutiqueProducts(json.data.products || [])
+      }
+    } catch (e) {
+      console.warn('[Boutique] Failed to load products:', e)
+    } finally {
+      setIsBoutiqueLoadingProducts(false)
+    }
+  }, [])
+
+  const handleInitiateBoutiqueSale = async () => {
+    if (!selectedBoutiqueProduct) {
+      showAlert('Select Product', 'Please select a product from the boutique inventory.', 'warning')
+      return
+    }
+    if (!boutiqueBuyerEmail.trim()) {
+      showAlert('Buyer Email Required', 'Enter the registered email address of the buyer.', 'warning')
+      return
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(boutiqueBuyerEmail.trim())) {
+      showAlert('Invalid Email', 'Please enter a valid email address.', 'warning')
+      return
+    }
+
+    setIsBoutiqueSubmitting(true)
+    try {
+      const token = localStorage.getItem('luxtrace_token') || ''
+      const res = await fetch('/api/boutique/initiate-sale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          product_id: selectedBoutiqueProduct.product_id,
+          buyer_email: boutiqueBuyerEmail.trim().toLowerCase(),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        const code = json.error?.code ?? 'UNKNOWN'
+        showAlert(`[${code}]`, json.error?.message ?? 'Sale initiation failed', 'error')
+        return
+      }
+
+      // Generate QR code from payment_url
+      const paymentUrl = json.data.payment_url
+      let qrDataUrl = ''
+      if (paymentUrl) {
+        qrDataUrl = await QRCode.toDataURL(paymentUrl, {
+          width: 280,
+          margin: 2,
+          color: { dark: '#0A0A0A', light: '#FFFFFF' },
+          errorCorrectionLevel: 'M',
+        })
+      }
+
+      setQrModal({ isOpen: true, qrDataUrl, saleResult: json.data })
+      await refreshData()
+    } catch (err: any) {
+      showAlert('Network Error', err.message ?? 'Check your connection and try again.', 'error')
+    } finally {
+      setIsBoutiqueSubmitting(false)
+    }
+  }
+
+  const resetBoutiqueSale = () => {
+    setSelectedBoutiqueProduct(null)
+    setBoutiqueBuyerEmail('')
+    setBoutiqueSearch('')
   }
 
   // ─── INTEGRATED SIMULATION HANDLERS ──────────────────────────────────────────
@@ -721,6 +815,20 @@ export default function Dashboard() {
               </svg>
               <span>P2P Escrows</span>
             </button>
+
+            <button 
+              onClick={() => switchTab('boutique')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${
+                activeTab === 'boutique'
+                  ? 'bg-gradient-to-r from-[#1a0e00] to-[#120a00] border border-[#C9A84C]/30 text-[#C9A84C] shadow-[0_0_15px_rgba(201,168,76,0.08)]'
+                  : 'text-zinc-400 hover:text-white hover:bg-white/3'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <span>Boutique Sell</span>
+            </button>
           </nav>
         </div>
 
@@ -782,11 +890,13 @@ export default function Dashboard() {
               {activeTab === 'dashboard' && "System Operations"}
               {activeTab === 'products' && "Asset Registry"}
               {activeTab === 'transactions' && "P2P Escrow Manager"}
+              {activeTab === 'boutique' && "Boutique Sale Terminal"}
             </h1>
             <p className="text-sm text-zinc-400 mt-1">
               {activeTab === 'dashboard' && "Real-time status of physical NFC-bound luxury assets on Sepolia Ethereum"}
               {activeTab === 'products' && "Trace, audit, and inspect digital twins registered in the smart contract"}
               {activeTab === 'transactions' && "Inspect Midtrans invoices and release funds upon hardware proximity scan"}
+              {activeTab === 'boutique' && "Select a product and buyer — generate QR payment link for in-store scanning"}
             </p>
           </div>
           
@@ -1495,6 +1605,148 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* ─── TAB CONTENT: BOUTIQUE SELL ─────────────────────────────────────────── */}
+        {activeTab === 'boutique' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+
+            {/* Step 1: Select Product */}
+            <div className="luxury-card rounded-xl p-6">
+              <div className="mb-5">
+                <span className="text-[10px] text-[#C9A84C] font-mono uppercase tracking-widest block mb-1">STEP 1 · SELECT PRODUCT</span>
+                <h3 className="text-sm font-bold font-dm uppercase tracking-widest text-white">Boutique Inventory</h3>
+                <p className="text-[10px] text-zinc-400 mt-1 font-mono">Choose a REGISTERED luxury item from the boutique stock.</p>
+              </div>
+
+              {selectedBoutiqueProduct ? (
+                <div>
+                  <div className="bg-black/40 border border-[#C9A84C]/20 rounded-lg p-4 mb-3 flex justify-between items-center">
+                    <div>
+                      <span className="text-[#C9A84C] text-[9px] font-mono uppercase tracking-widest block mb-1">{selectedBoutiqueProduct.brand}</span>
+                      <span className="text-white font-dm font-bold text-sm block">{selectedBoutiqueProduct.name}</span>
+                      <span className="text-zinc-500 text-[10px] font-mono">{selectedBoutiqueProduct.serial_number}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-white font-mono font-bold text-sm block">
+                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(selectedBoutiqueProduct.price_idr)}
+                      </span>
+                      <button
+                        onClick={() => setSelectedBoutiqueProduct(null)}
+                        className="text-[9px] font-mono text-zinc-500 hover:text-zinc-300 uppercase tracking-wider mt-2 cursor-pointer transition"
+                      >
+                        Change →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="relative mb-3">
+                    <input
+                      type="text"
+                      placeholder="Search by brand, name, serial..."
+                      value={boutiqueSearch}
+                      onChange={(e) => setBoutiqueSearch(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-xs focus:outline-none focus:border-[#C9A84C]/50 transition duration-300 font-sans text-white placeholder-zinc-600"
+                    />
+                    <svg className="w-4 h-4 absolute right-3 top-2.5 text-zinc-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+
+                  {isBoutiqueLoadingProducts ? (
+                    <div className="flex items-center gap-3 py-6 text-zinc-500 text-xs font-mono">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Loading boutique inventory...
+                    </div>
+                  ) : boutiqueProducts.filter(p =>
+                    !boutiqueSearch ||
+                    p.brand?.toLowerCase().includes(boutiqueSearch.toLowerCase()) ||
+                    p.name?.toLowerCase().includes(boutiqueSearch.toLowerCase()) ||
+                    p.serial_number?.toLowerCase().includes(boutiqueSearch.toLowerCase())
+                  ).length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="text-zinc-500 text-xs font-mono">No REGISTERED products available.</p>
+                      <p className="text-zinc-600 text-[10px] font-mono mt-1">Activate manufactured items first via the Asset Registry.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {boutiqueProducts
+                        .filter(p =>
+                          !boutiqueSearch ||
+                          p.brand?.toLowerCase().includes(boutiqueSearch.toLowerCase()) ||
+                          p.name?.toLowerCase().includes(boutiqueSearch.toLowerCase()) ||
+                          p.serial_number?.toLowerCase().includes(boutiqueSearch.toLowerCase())
+                        )
+                        .map((p: any) => (
+                          <button
+                            key={p.product_id}
+                            onClick={() => setSelectedBoutiqueProduct(p)}
+                            className="w-full bg-black/30 hover:bg-[#C9A84C]/5 border border-white/5 hover:border-[#C9A84C]/20 rounded-lg p-3.5 text-left transition duration-200 cursor-pointer flex justify-between items-center group"
+                          >
+                            <div>
+                              <span className="text-[#C9A84C] text-[9px] font-mono uppercase tracking-widest block">{p.brand}</span>
+                              <span className="text-white text-xs font-dm font-semibold group-hover:text-[#C9A84C] transition">{p.name}</span>
+                              <span className="text-zinc-500 text-[9px] font-mono block mt-0.5">{p.serial_number}</span>
+                            </div>
+                            <span className="text-zinc-300 text-xs font-mono font-semibold">
+                              {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(p.price_idr)}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Step 2: Buyer Email */}
+            <div className="luxury-card rounded-xl p-6">
+              <div className="mb-5">
+                <span className="text-[10px] text-[#C9A84C] font-mono uppercase tracking-widest block mb-1">STEP 2 · BUYER INFORMATION</span>
+                <h3 className="text-sm font-bold font-dm uppercase tracking-widest text-white">Buyer Email Address</h3>
+                <p className="text-[10px] text-zinc-400 mt-1 font-mono">Buyer must have an active Luxtrace account. Enter their registered email.</p>
+              </div>
+              <input
+                type="email"
+                id="boutique-buyer-email"
+                placeholder="buyer@example.com"
+                value={boutiqueBuyerEmail}
+                onChange={(e) => setBoutiqueBuyerEmail(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 focus:border-[#C9A84C]/50 rounded-lg px-4 py-3 text-sm font-sans text-white placeholder-zinc-600 focus:outline-none transition duration-300"
+              />
+            </div>
+
+            {/* Submit */}
+            <button
+              id="boutique-initiate-sale-btn"
+              onClick={handleInitiateBoutiqueSale}
+              disabled={!selectedBoutiqueProduct || !boutiqueBuyerEmail || isBoutiqueSubmitting}
+              className={`w-full h-12 rounded-xl text-sm font-dm font-bold uppercase tracking-wider transition duration-200 cursor-pointer ${
+                !selectedBoutiqueProduct || !boutiqueBuyerEmail || isBoutiqueSubmitting
+                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-40'
+                  : 'bg-[#C9A84C] hover:bg-[#d4b055] text-[#0A0A0A] shadow-[0_0_20px_rgba(201,168,76,0.3)] hover:shadow-[0_0_30px_rgba(201,168,76,0.5)]'
+              }`}
+            >
+              {isBoutiqueSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Processing...
+                </span>
+              ) : '🏛️ Generate QR Payment Link'}
+            </button>
+
+            <p className="text-center text-[10px] text-zinc-600 font-mono">
+              After submission, a QR code will appear for the buyer to scan & pay in-store via Midtrans.
+            </p>
+          </div>
+        )}
+
       </main>
       
       {/* Hidden file input for global CSV import */}
@@ -1505,6 +1757,87 @@ export default function Dashboard() {
         onChange={handleCsvUpload} 
         className="hidden" 
       />
+
+      {/* ─── QR CODE PAYMENT MODAL ─────────────────────────────────────────────── */}
+      {qrModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+          <div className="relative bg-[#0D0D0D] border border-[#C9A84C]/20 rounded-2xl p-8 max-w-md w-full shadow-[0_0_60px_rgba(201,168,76,0.15)]">
+            {/* Close button */}
+            <button
+              onClick={() => { setQrModal({ isOpen: false, qrDataUrl: '', saleResult: null }); resetBoutiqueSale() }}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 rounded-full bg-[#C9A84C]/10 border border-[#C9A84C]/20 flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-[#C9A84C]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-[#C9A84C] text-[10px] font-mono uppercase tracking-[3px] mb-1">Sale Initiated</p>
+              <h2 className="text-white text-lg font-dm font-bold uppercase tracking-wide">Payment QR Code</h2>
+              <p className="text-zinc-400 text-xs font-mono mt-1">Buyer scans this to complete payment</p>
+            </div>
+
+            {/* QR Code */}
+            {qrModal.qrDataUrl ? (
+              <div className="flex flex-col items-center mb-6">
+                <div className="p-4 bg-white rounded-2xl shadow-[0_0_40px_rgba(201,168,76,0.2)]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qrModal.qrDataUrl} alt="Payment QR Code" width={240} height={240} />
+                </div>
+                <p className="text-zinc-500 text-[10px] font-mono mt-3 text-center">
+                  📲 Point buyer&apos;s camera at this code to open Midtrans checkout
+                </p>
+              </div>
+            ) : (
+              <div className="bg-zinc-900 border border-white/5 rounded-xl p-4 mb-6 text-center">
+                <p className="text-zinc-400 text-xs font-mono">Payment link sent via push notification.</p>
+              </div>
+            )}
+
+            {/* Sale Details */}
+            {qrModal.saleResult && (
+              <div className="space-y-2 border-t border-white/5 pt-4 mb-6">
+                <div className="flex justify-between text-[10px] font-mono">
+                  <span className="text-zinc-500 uppercase tracking-wider">Product</span>
+                  <span className="text-white">{qrModal.saleResult.product?.brand} {qrModal.saleResult.product?.name}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-mono">
+                  <span className="text-zinc-500 uppercase tracking-wider">Serial</span>
+                  <span className="text-white">{qrModal.saleResult.product?.serial_number}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-mono">
+                  <span className="text-zinc-500 uppercase tracking-wider">Buyer</span>
+                  <span className="text-zinc-300">{qrModal.saleResult.buyer?.email}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-mono">
+                  <span className="text-zinc-500 uppercase tracking-wider">Amount</span>
+                  <span className="text-[#C9A84C] font-semibold">
+                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(qrModal.saleResult.amount_idr)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[10px] font-mono">
+                  <span className="text-zinc-500 uppercase tracking-wider">Order ID</span>
+                  <span className="text-zinc-400">{qrModal.saleResult.order_id}</span>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => { setQrModal({ isOpen: false, qrDataUrl: '', saleResult: null }); resetBoutiqueSale() }}
+              className="w-full h-10 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 border border-[#C9A84C]/30 hover:border-[#C9A84C]/50 rounded-xl text-[#C9A84C] text-xs font-dm font-bold uppercase tracking-wider transition cursor-pointer"
+            >
+              Initiate Another Sale
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ─── PREMIUM LOADER OVERLAY ───────────────────────────────────────────── */}
       <Loader isOpen={isLoaderOpen} title={loaderTitle} message={loaderMessage} />
