@@ -3,6 +3,7 @@ import { qrSessionRepository } from '@/repositories/qr-session.repository'
 import { hashNfcUid, verifyNfcHash, encryptQrPayload, decryptQrPayload } from '@/lib/crypto'
 import { v4 as uuidv4 } from 'uuid'
 import type { NfcTag } from '@/types'
+import crypto from 'crypto'
 
 // QR session TTL: 15 minutes for remote shipping (needs time for delivery handover)
 const QR_SESSION_TTL_MS = 15 * 60 * 1000
@@ -41,6 +42,12 @@ export const nfcService = {
   async verifyForProduct(productId: string, scannedUid: string): Promise<boolean> {
     const tag = await nfcRepository.findByProductId(productId)
     if (!tag) return false
+    
+    // Normalize both strings to ignore whitespace, letter casing, colons, and dashes
+    const normScanned = scannedUid.trim().toLowerCase().replace(/[:\-]/g, '')
+    const normStored = tag.nfc_uid.trim().toLowerCase().replace(/[:\-]/g, '')
+    if (normScanned === normStored) return true
+
     return verifyNfcHash(scannedUid, tag.secure_key_hash)
   },
 
@@ -49,8 +56,15 @@ export const nfcService = {
    * Returns product_id if found, null otherwise.
    */
   async findProductByScannedUid(scannedUid: string): Promise<string | null> {
-    const hash = hashNfcUid(scannedUid)
-    const tag = await nfcRepository.findByHash(hash)
+    const hashNormalized = hashNfcUid(scannedUid)
+    let tag = await nfcRepository.findByHash(hashNormalized)
+    if (!tag) {
+      const hashRaw = crypto
+        .createHash('sha256')
+        .update(`${scannedUid}${process.env.NFC_SECRET_SALT || 'placeholder-salt'}`)
+        .digest('hex')
+      tag = await nfcRepository.findByHash(hashRaw)
+    }
     return tag?.product_id ?? null
   },
 

@@ -163,6 +163,7 @@ export default function Dashboard() {
 
   // ─── TRANSACTION DETAILS INSPECTOR STATE ──────────────────────────────────
   const [selectedTxDetail, setSelectedTxDetail] = useState<any | null>(null)
+  const [selectedProductNfcUid, setSelectedProductNfcUid] = useState<string | null>(null)
   const [txQrDataUrl, setTxQrDataUrl] = useState<string>('')
   const [isLoadingTxQr, setIsLoadingTxQr] = useState(false)
 
@@ -323,7 +324,8 @@ export default function Dashboard() {
           amount: `Rp ${t.amount_idr.toLocaleString('id-ID')}`,
           amountNum: t.amount_idr,
           status: t.status,
-          date: new Date(t.created_at).toLocaleDateString()
+          date: new Date(t.created_at).toLocaleDateString(),
+          payment_ref: t.payment_ref
         }))
         setTransactions(mappedTxs)
       } catch (err) {
@@ -414,7 +416,8 @@ export default function Dashboard() {
           amount: `Rp ${t.amount_idr.toLocaleString('id-ID')}`,
           amountNum: t.amount_idr,
           status: t.status,
-          date: new Date(t.created_at).toLocaleDateString()
+          date: new Date(t.created_at).toLocaleDateString(),
+          payment_ref: t.payment_ref
         }))
         setTransactions(mappedTxs)
       }
@@ -422,6 +425,30 @@ export default function Dashboard() {
       console.warn('[Dashboard] Failed to refresh data:', e)
     }
   }
+
+  useEffect(() => {
+    const prodId = selectedTxDetail?.product?.product_id || selectedProduct?.product_id
+    if (prodId) {
+      setSelectedProductNfcUid(null)
+      const fetchNfcUid = async () => {
+        try {
+          const token = localStorage.getItem('luxtrace_token') || ''
+          const res = await fetch(`/api/products/${prodId}/nfc-debug`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          const data = await res.json()
+          if (res.ok && data.success) {
+            setSelectedProductNfcUid(data.data.nfc_uid)
+          }
+        } catch (e) {
+          console.warn('Failed to fetch NFC UID:', e)
+        }
+      }
+      fetchNfcUid()
+    } else {
+      setSelectedProductNfcUid(null)
+    }
+  }, [selectedProduct, selectedTxDetail])
 
   // ─── BOUTIQUE SELL HANDLERS ───────────────────────────────────────────────
   const fetchBoutiqueProducts = useCallback(async () => {
@@ -704,7 +731,7 @@ export default function Dashboard() {
         }
         const scannedUid = nfcDebugData.data.nfc_uid
 
-        const isDirect = targetTx.type === 'P2P_DIRECT_HANDOVER'
+        const isDirect = targetTx.type === 'P2P_DIRECT_HANDOVER' || (targetTx.type === 'PRIMARY_BOUTIQUE' && !targetTx.payment_ref)
         let verifyRes
         if (isDirect) {
           // Direct P2P verification uses the dedicated direct-verify endpoint
@@ -1503,6 +1530,22 @@ export default function Dashboard() {
                           {selectedProduct.wallet}
                         </span>
                       </div>
+
+                      {selectedProductNfcUid && (
+                        <div className="flex justify-between items-center font-mono border-t border-white/5 pt-3">
+                          <span className="text-zinc-500 uppercase text-[9px]">NFC UID:</span>
+                          <span 
+                            className="text-[#00FFB2] cursor-pointer hover:underline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedProductNfcUid)
+                              alert('NFC UID copied to clipboard!')
+                            }}
+                            title="Click to copy NFC UID"
+                          >
+                            {selectedProductNfcUid}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1640,12 +1683,21 @@ export default function Dashboard() {
                             </button>
 
                             {tx.status === 'PENDING' && (
-                              <button
-                                onClick={() => handlePaymentSuccess(tx.id)}
-                                className="px-3 py-1.5 bg-[#0F2A25]/30 hover:bg-[#00FFB2]/10 border border-[#00FFB2]/20 hover:border-[#00FFB2]/40 rounded text-[9px] font-mono text-[#00FFB2] transition uppercase tracking-wider cursor-pointer"
-                              >
-                                Trigger Pay
-                              </button>
+                              (tx.type === 'P2P_DIRECT_HANDOVER' || (tx.type === 'PRIMARY_BOUTIQUE' && !tx.payment_ref)) ? (
+                                <button
+                                  onClick={() => handleNfcVerification(tx.id)}
+                                  className="px-3 py-1.5 bg-amber-400/5 hover:bg-amber-400/10 border border-amber-400/20 hover:border-amber-400/40 rounded text-[9px] font-mono text-amber-400 transition uppercase tracking-wider cursor-pointer"
+                                >
+                                  NFC Handover
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handlePaymentSuccess(tx.id)}
+                                  className="px-3 py-1.5 bg-[#0F2A25]/30 hover:bg-[#00FFB2]/10 border border-[#00FFB2]/20 hover:border-[#00FFB2]/40 rounded text-[9px] font-mono text-[#00FFB2] transition uppercase tracking-wider cursor-pointer"
+                                >
+                                  Trigger Pay
+                                </button>
+                              )
                             )}
 
                             {tx.status === 'PAID' && (
@@ -2057,6 +2109,23 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </div>
+                    {selectedProductNfcUid && (
+                      <div className="border-t border-white/5 pt-3 flex justify-between items-center font-mono">
+                        <div>
+                          <span className="text-[9px] text-zinc-500 uppercase tracking-widest block">Bound NFC UID (Demo Copy)</span>
+                          <span 
+                            className="text-[#00FFB2] text-[11px] cursor-pointer hover:underline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedProductNfcUid)
+                              alert('NFC UID copied to clipboard!')
+                            }}
+                            title="Click to copy NFC UID"
+                          >
+                            {selectedProductNfcUid}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

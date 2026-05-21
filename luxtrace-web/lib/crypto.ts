@@ -17,21 +17,37 @@ if ((!process.env.NFC_SECRET_SALT || !process.env.QR_ENCRYPTION_KEY || Buffer.fr
  * Raw UID is never stored or returned to the client.
  */
 export function hashNfcUid(rawUid: string): string {
+  const normalized = String(rawUid).trim().toLowerCase()
   return crypto
     .createHash('sha256')
-    .update(`${rawUid}${NFC_SECRET_SALT}`)
+    .update(`${normalized}${NFC_SECRET_SALT}`)
     .digest('hex')
 }
 
 /**
  * Timing-safe comparison for NFC hash verification.
+ * Supports both normalized (lowercase, trimmed) and original raw format for backward compatibility.
  */
 export function verifyNfcHash(rawUid: string, storedHash: string): boolean {
-  const computed = hashNfcUid(rawUid)
-  return crypto.timingSafeEqual(
-    Buffer.from(computed, 'hex'),
-    Buffer.from(storedHash, 'hex')
-  )
+  const computedNormalized = hashNfcUid(rawUid)
+  const computedRaw = crypto
+    .createHash('sha256')
+    .update(`${rawUid}${NFC_SECRET_SALT}`)
+    .digest('hex')
+
+  try {
+    const normalizedMatch = crypto.timingSafeEqual(
+      Buffer.from(computedNormalized, 'hex'),
+      Buffer.from(storedHash, 'hex')
+    )
+    const rawMatch = crypto.timingSafeEqual(
+      Buffer.from(computedRaw, 'hex'),
+      Buffer.from(storedHash, 'hex')
+    )
+    return normalizedMatch || rawMatch
+  } catch (err) {
+    return false
+  }
 }
 
 const ALGORITHM = 'aes-256-cbc'

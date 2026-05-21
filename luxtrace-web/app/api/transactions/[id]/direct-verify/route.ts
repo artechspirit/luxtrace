@@ -3,6 +3,8 @@ import { transactionService } from '@/services/transaction.service'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { ok, err, unauthorized, serverError } from '@/lib/response'
 import { qrSessionRepository } from '@/repositories/qr-session.repository'
+import { transactionRepository } from '@/repositories/transaction.repository'
+import { nfcService } from '@/services/nfc.service'
 
 /**
  * POST /api/transactions/:id/direct-verify
@@ -53,11 +55,28 @@ export async function POST(
 
     // If session_id is not passed in body, lookup active session by transactionId
     if (!session_id) {
-      const activeSession = await qrSessionRepository.findByTransactionId(transactionId)
-      if (!activeSession) {
-        return err('SESSION_EXPIRED', 'No active/unused QR session found for this transaction', 410)
+      let activeSession = await qrSessionRepository.findByTransactionId(transactionId)
+      
+      // If session is expired, treat it as null so we can recreate it
+      if (activeSession && new Date(activeSession.expires_at) < new Date()) {
+        activeSession = null
       }
-      session_id = activeSession.session_id
+
+      if (!activeSession) {
+        // Find transaction to retrieve its product_id
+        const tx = await transactionRepository.findById(transactionId)
+        if (!tx) return err('NOT_FOUND', 'Transaction not found', 404)
+
+        try {
+          // Dynamically generate a new QR session for simulation robustness
+          const qr = await nfcService.generateQrPayload(transactionId, tx.product_id)
+          session_id = qr.session_id
+        } catch (sessionErr: any) {
+          return err('SESSION_CREATION_FAILED', sessionErr.message || 'Failed to create active session', 500)
+        }
+      } else {
+        session_id = activeSession.session_id
+      }
     }
 
     const result = await transactionService.verifyDirectHandover(

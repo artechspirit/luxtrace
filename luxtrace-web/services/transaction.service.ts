@@ -249,8 +249,10 @@ export const transactionService = {
     const nfcVerified = await nfcService.verifyForProduct(productId, scannedUid)
 
     if (!nfcVerified) {
-      // Fraud path: log + flag, escrow remains locked for manual review
-      await transactionRepository.updateStatus(transactionId, 'FRAUD_FLAGGED')
+      // Revert session usage so they can retry immediately
+      await qrSessionRepository.resetSession(sessionId)
+
+      // Fraud path: log for forensics, but keep status as IN_TRANSIT so they can retry
       await productLogRepository.insert({
         product_id: productId,
         event: 'FRAUD_ATTEMPT',
@@ -259,12 +261,14 @@ export const transactionService = {
         metadata: {
           transaction_id: transactionId,
           session_id: sessionId,
+          scanned_uid_entered: scannedUid, // logged in plaintext for easy demo diagnostics
           scanned_uid_hash: Buffer.from(scannedUid).toString('base64'), // obfuscated for forensics
           timestamp: new Date().toISOString(),
+          note: 'Demo retry allowed'
         },
       })
       throw Object.assign(
-        new Error('NFC chip does not match this product. Fraud attempt logged. Escrow held for review.'),
+        new Error('NFC chip does not match this product. Please check your input and try again.'),
         { code: 'NFC_MISMATCH' }
       )
     }
@@ -422,13 +426,20 @@ export const transactionService = {
 
     const nfcVerified = await nfcService.verifyForProduct(productId, scannedUid)
     if (!nfcVerified) {
-      await transactionRepository.updateStatus(transactionId, 'FRAUD_FLAGGED')
+      // Revert session usage so they can retry immediately
+      await qrSessionRepository.resetSession(sessionId)
+
       await productLogRepository.insert({
         product_id: productId,
         event: 'FRAUD_ATTEMPT',
         actor_id: callerId,
         actor_role: 'CONSUMER',
-        metadata: { transaction_id: transactionId, session_id: sessionId },
+        metadata: { 
+          transaction_id: transactionId, 
+          session_id: sessionId, 
+          scanned_uid_entered: scannedUid, // logged in plaintext for easy demo diagnostics
+          note: 'Demo retry allowed' 
+        },
       })
       throw Object.assign(new Error('NFC mismatch'), { code: 'NFC_MISMATCH' })
     }

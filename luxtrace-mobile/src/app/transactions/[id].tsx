@@ -365,12 +365,24 @@ export default function TransactionDetailScreen() {
           </View>
         )}
 
-        {isBuyer && (transaction.status === 'PAID' || transaction.status === 'IN_TRANSIT') && (
+        {isBuyer && (
+          transaction.status === 'PAID' ||
+          transaction.status === 'IN_TRANSIT' ||
+          (transaction.status === 'PENDING' && (
+            transaction.type === 'P2P_DIRECT_HANDOVER' ||
+            (transaction.type === 'PRIMARY_BOUTIQUE' && !transaction.payment_ref)
+          ))
+        ) && (
           <View style={styles.buyerActionCard}>
             <Ionicons name="swap-horizontal-outline" size={32} color="#00FFB2" style={{ alignSelf: 'center', marginBottom: 12 }} />
             <Text style={styles.buyerActionTitle}>READY FOR VERIFICATION</Text>
             <Text style={styles.buyerActionSubtext}>
-              Escrow is funded. Meet the seller, scan their Handover QR code, and tap the physical product NFC tag to claim ownership.
+              {transaction.type === 'PRIMARY_BOUTIQUE'
+                ? 'Meet the boutique staff, scan their Boutique Handover QR code, and tap the physical product NFC tag to claim ownership.'
+                : transaction.type === 'P2P_DIRECT_HANDOVER'
+                  ? 'Meet the seller, scan their Handover QR code, and verify physical NFC tag to claim ownership.'
+                  : 'Escrow is funded. Meet the seller, scan their Handover QR code, and tap the physical product NFC tag to claim ownership.'
+              }
             </Text>
             <TouchableOpacity
               style={styles.payButton}

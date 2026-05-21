@@ -75,4 +75,11 @@ export const qrSessionRepository = {
     if (error || !data) return false // already used or not found
     return true
   },
+
+  async resetSession(sessionId: string): Promise<void> {
+    await supabase
+      .from('qr_sessions')
+      .update({ is_used: false })
+      .eq('session_id', sessionId)
+  },
 }
