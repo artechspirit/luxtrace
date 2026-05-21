@@ -1,0 +1,40 @@
+# Dependencies (will be reinstalled inside container)
+node_modules
+npm-debug.log*
+
+# Next.js build output (will be rebuilt inside container)
+.next
+out
+
+# Environment files (inject via Cloud Run secrets / env vars)
+.env
+.env.local
+.env.*.local
+
+# Development & test files
+*.test.ts
+*.spec.ts
+test-data/
+scripts/
+
+# Version control
+.git
+.git_bak
+.gitignore
+
+# Editor configs
+.vscode
+.idea
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+README.md
+AGENTS.md
+CLAUDE.md
+get_products.js
+get_users.js
+tsconfig.tsbuildinfo
