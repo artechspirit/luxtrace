@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import type { Profile } from '@/types'
 import { authService } from '@/services/auth.service'
 
-const supabaseUrl = process.env.SUPABASE_URL!
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.SUPABASE_URL || 'https://placeholder.supabase.co'
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'placeholder-key'
 
 /**
  * Verify the Bearer JWT from the request header.

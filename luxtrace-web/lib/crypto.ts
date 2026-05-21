@@ -1,14 +1,15 @@
 import crypto from 'crypto'
 
-const NFC_SECRET_SALT = process.env.NFC_SECRET_SALT
-const QR_ENCRYPTION_KEY = process.env.QR_ENCRYPTION_KEY
+const NFC_SECRET_SALT = process.env.NFC_SECRET_SALT || 'placeholder-salt'
+const QR_ENCRYPTION_KEY = process.env.QR_ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 
-if (!NFC_SECRET_SALT) {
-  throw new Error('[ENV] NFC_SECRET_SALT is required')
-}
-
-if (!QR_ENCRYPTION_KEY || Buffer.from(QR_ENCRYPTION_KEY, 'hex').length !== 32) {
-  throw new Error('[ENV] QR_ENCRYPTION_KEY must be a 32-byte hex string')
+if ((!process.env.NFC_SECRET_SALT || !process.env.QR_ENCRYPTION_KEY || Buffer.from(process.env.QR_ENCRYPTION_KEY, 'hex').length !== 32) && process.env.NEXT_PHASE !== 'phase-production-build') {
+  if (!process.env.NFC_SECRET_SALT) {
+    throw new Error('[ENV] NFC_SECRET_SALT is required')
+  }
+  if (!process.env.QR_ENCRYPTION_KEY || Buffer.from(process.env.QR_ENCRYPTION_KEY, 'hex').length !== 32) {
+    throw new Error('[ENV] QR_ENCRYPTION_KEY must be a 32-byte hex string')
+  }
 }
 
 /**

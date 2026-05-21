@@ -31,13 +31,15 @@ import { supabase } from './supabase'
 
 // ─── ENV Validation ───────────────────────────────────────────────────────────
 
-const secretKey = process.env.THIRDWEB_SECRET_KEY
-const brandPrivateKey = process.env.BRAND_WALLET_PRIVATE_KEY
-const contractAddress = process.env.NFT_CONTRACT_ADDRESS
+const secretKey = process.env.THIRDWEB_SECRET_KEY || 'placeholder-secret'
+const brandPrivateKey = process.env.BRAND_WALLET_PRIVATE_KEY || '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const contractAddress = process.env.NFT_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000'
 
-if (!secretKey) throw new Error('[ENV] THIRDWEB_SECRET_KEY is required')
-if (!brandPrivateKey) throw new Error('[ENV] BRAND_WALLET_PRIVATE_KEY is required (0x-prefixed)')
-if (!contractAddress) throw new Error('[ENV] NFT_CONTRACT_ADDRESS is required')
+if ((!process.env.THIRDWEB_SECRET_KEY || !process.env.BRAND_WALLET_PRIVATE_KEY || !process.env.NFT_CONTRACT_ADDRESS) && process.env.NEXT_PHASE !== 'phase-production-build') {
+  if (!process.env.THIRDWEB_SECRET_KEY) throw new Error('[ENV] THIRDWEB_SECRET_KEY is required')
+  if (!process.env.BRAND_WALLET_PRIVATE_KEY) throw new Error('[ENV] BRAND_WALLET_PRIVATE_KEY is required (0x-prefixed)')
+  if (!process.env.NFT_CONTRACT_ADDRESS) throw new Error('[ENV] NFT_CONTRACT_ADDRESS is required')
+}
 
 // ─── Client + Chain + Contract ───────────────────────────────────────────────
 

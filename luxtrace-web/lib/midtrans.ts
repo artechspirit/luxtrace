@@ -1,11 +1,11 @@
 import Midtrans from 'midtrans-client'
 import crypto from 'crypto'
 
-const serverKey = process.env.MIDTRANS_SERVER_KEY
-const clientKey = process.env.MIDTRANS_CLIENT_KEY
+const serverKey = process.env.MIDTRANS_SERVER_KEY || 'placeholder-server-key'
+const clientKey = process.env.MIDTRANS_CLIENT_KEY || 'placeholder-client-key'
 const isProduction = process.env.NODE_ENV === 'production'
 
-if (!serverKey || !clientKey) {
+if ((!process.env.MIDTRANS_SERVER_KEY || !process.env.MIDTRANS_CLIENT_KEY) && process.env.NEXT_PHASE !== 'phase-production-build') {
   throw new Error('[ENV] MIDTRANS_SERVER_KEY and MIDTRANS_CLIENT_KEY are required')
 }
 
