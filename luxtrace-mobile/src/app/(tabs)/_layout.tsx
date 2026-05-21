@@ -1,11 +1,21 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
+  const router = useRouter();
+
+  // Double-guard: if somehow an operator reaches the consumer tabs, redirect them
+  useEffect(() => {
+    if (user && (user.role === 'OPERATOR' || user.role === 'ADMIN')) {
+      router.replace('/(operator)');
+    }
+  }, [user]);
 
   return (
     <Tabs

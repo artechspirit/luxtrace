@@ -13,7 +13,7 @@ export default function OperatorTabsLayout() {
   // Double-guard: if somehow a non-operator reaches here, redirect
   useEffect(() => {
     if (user && user.role !== 'OPERATOR' && user.role !== 'ADMIN') {
-      router.replace('/')
+      router.replace('/(tabs)')
     }
   }, [user])
 

@@ -1,6 +1,6 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import React, { useEffect } from 'react';
-import { useColorScheme, View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '@/stores/authStore';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
@@ -17,13 +17,9 @@ import { GlobalAlert } from '@/components/ui/GlobalAlert';
 import '../global.css';
 
 export default function RootLayout() {
-  const { isAuthenticated, loadSession, isLoading, token } = useAuthStore();
+  const { isAuthenticated, loadSession, isLoading, token, user } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
-
-  // Only OPERATOR or ADMIN roles get operator access — never treat undefined/null as operator
-  const isOperator = (role: string | null | undefined) =>
-    role === 'OPERATOR' || role === 'ADMIN';
 
   const [fontsLoaded] = useFonts({
     'PlusJakartaSans-Regular': PlusJakartaSans_400Regular,
@@ -50,39 +46,26 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const isAuthCallback = segments[0] === 'auth-callback';
-    const inOperatorGroup = segments[0] === '(operator)';
-    const inConsumerGroup = segments[0] === '(tabs)';
 
+    // Case 1: Not logged in → force to login
     if (!isAuthenticated && !inAuthGroup && !isAuthCallback) {
-      // Not logged in → force login
       router.replace('/(auth)/login');
-    } else if (isAuthenticated && inAuthGroup) {
-      // Logged in but on auth screen → route by role
-      const role = useAuthStore.getState().user?.role;
-      if (isOperator(role)) {
+      return;
+    }
+
+    // Case 2: Logged in but still on auth screen → route by role
+    if (isAuthenticated && inAuthGroup) {
+      const role = user?.role;
+      console.log('[RootLayout] Authenticated on auth screen, role:', role, '→ routing');
+      if (role === 'OPERATOR' || role === 'ADMIN') {
         router.replace('/(operator)');
       } else {
-        router.replace('/');
-      }
-    } else if (isAuthenticated && !inAuthGroup && !isAuthCallback) {
-      // Logged in — enforce role-based group access
-      const role = useAuthStore.getState().user?.role;
-      const isOperatorRole = isOperator(role);
-
-      if (isOperatorRole && inConsumerGroup) {
-        // Operator accidentally in consumer group → redirect to operator
-        router.replace('/(operator)');
-      } else if (!isOperatorRole && inOperatorGroup) {
-        // Consumer accidentally in operator group → redirect to consumer
-        router.replace('/');
-      } else if (isOperatorRole && !inOperatorGroup && !inConsumerGroup && !isAuthCallback) {
-        // Operator on root or unknown route → go to operator dashboard
-        if (segments[0] === undefined) {
-          router.replace('/(operator)');
-        }
+        router.replace('/(tabs)');
       }
     }
-  }, [isAuthenticated, segments, isLoading, fontsLoaded]);
+
+    // All other cross-group enforcement is handled by each group's own _layout guard
+  }, [isAuthenticated, user, segments, isLoading, fontsLoaded]);
 
   if (isLoading || !fontsLoaded) {
     return (
@@ -107,3 +90,4 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+

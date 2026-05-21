@@ -37,8 +37,8 @@ export default function AuthCallbackScreen() {
       console.log('[AuthCallback] Role is', role, '→ redirecting to /(operator)')
       router.replace('/(operator)')
     } else {
-      console.log('[AuthCallback] Role is', role, '→ redirecting to /')
-      router.replace('/')
+      console.log('[AuthCallback] Role is', role, '→ redirecting to /(tabs)')
+      router.replace('/(tabs)')
     }
   }
 
@@ -111,6 +111,9 @@ export default function AuthCallbackScreen() {
           const { access_token, user_id, email, full_name, avatar_url, wallet_address, role, is_new_user } = result.data
           const userData = { user_id, email, full_name, role, wallet_address, avatar_url }
 
+          // 🔍 DEBUG: Print FULL raw result.data to catch unexpected fields
+          console.log('[AuthCallback] 🔍 RAW result.data:', JSON.stringify(result.data))
+          console.log('[AuthCallback] 🔍 Extracted role:', role, '| typeof role:', typeof role)
           console.log('[AuthCallback] Exchange success, userData:', userData, 'is_new_user:', is_new_user)
           
           if (is_new_user) {
@@ -120,6 +123,7 @@ export default function AuthCallbackScreen() {
           } else {
             setIsApiLoading(false)
             await setSession(access_token, userData)
+            console.log('[AuthCallback] 🔍 Calling redirectByRole with role:', userData.role)
             redirectByRole(userData.role)
           }
         } else if (accessToken) {
@@ -137,9 +141,13 @@ export default function AuthCallbackScreen() {
             throw new Error(result.message || 'Failed to fetch user profile with access token')
           }
 
+          // 🔍 DEBUG: Print FULL raw result.data from /auth/me
+          console.log('[AuthCallback] 🔍 RAW /auth/me result.data:', JSON.stringify(result.data))
+          console.log('[AuthCallback] 🔍 role from /auth/me:', result.data?.role, '| typeof:', typeof result.data?.role)
           console.log('[AuthCallback] Profile fetch success, userData:', result.data)
           setIsApiLoading(false)
           await setSession(accessToken, result.data)
+          console.log('[AuthCallback] 🔍 Calling redirectByRole with role:', result.data?.role)
           redirectByRole(result.data?.role)
         }
       } catch (err: any) {

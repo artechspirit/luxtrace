@@ -66,7 +66,12 @@ export default function LoginScreen() {
     if (loaderFinished && pendingSession) {
       setIsLuxuryLoading(false)
       setSession(pendingSession.token, pendingSession.user).then(() => {
-        redirectByRole(pendingSession.user?.role)
+        const role = pendingSession.user?.role
+        if (role === 'OPERATOR' || role === 'ADMIN') {
+          router.replace('/(operator)')
+        } else {
+          router.replace('/(tabs)')
+        }
       })
     }
   }, [loaderFinished, pendingSession])
@@ -132,10 +137,11 @@ export default function LoginScreen() {
   // Handle redirect on successful login
   useEffect(() => {
     if (isAuthenticated && user) {
+      console.log('[Login] 🔍 isAuthenticated effect fired, user.role:', user.role, '| typeof:', typeof user.role)
       if (user.role === 'ADMIN' || user.role === 'OPERATOR') {
         router.replace('/(operator)')
       } else {
-        router.replace('/')
+        router.replace('/(tabs)')
       }
     }
   }, [isAuthenticated, user])
@@ -164,6 +170,10 @@ export default function LoginScreen() {
 
       const { access_token, user_id, full_name, avatar_url, wallet_address, role } = result.data
       const userData = { user_id, email: email.trim(), full_name, role, wallet_address, avatar_url }
+
+      // 🔍 DEBUG
+      console.log('[Login] 🔍 RAW result.data:', JSON.stringify(result.data))
+      console.log('[Login] 🔍 Extracted role:', role, '| typeof:', typeof role)
 
       await setSession(access_token, userData)
     } catch (err: any) {
