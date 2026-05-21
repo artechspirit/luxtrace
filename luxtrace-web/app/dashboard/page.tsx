@@ -740,9 +740,20 @@ export default function Dashboard() {
               <p className="text-[11px] font-bold text-white truncate">{adminUser?.full_name || 'System Operator'}</p>
               <p className="text-[9px] text-zinc-500 truncate">{adminUser?.email || 'operator@luxtrace.com'}</p>
             </div>
-            <div className="flex items-center justify-between text-[9px] text-[#00FFB2] font-mono border-t border-white/5 pt-2 mt-2">
+             <div className="flex items-center justify-between text-[9px] text-[#00FFB2] font-mono border-t border-white/5 pt-2 mt-2">
               <span>GAS RELAYER: ACTIVE</span>
               <span className="opacity-60">12s LATENCY</span>
+            </div>
+            <div className="border-t border-white/5 pt-2 mt-2">
+              <a 
+                href="https://thirdweb.com/sepolia/0x6d87293F44D68365De7cE9c29dAF752971237239" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="flex items-center justify-between text-[9px] text-zinc-400 hover:text-[#00FFB2] font-mono transition duration-200"
+              >
+                <span>CONTRACT EXPLORER ↗</span>
+                <span className="opacity-60">0x6d87...7239</span>
+              </a>
             </div>
           </div>
 
@@ -1123,18 +1134,31 @@ export default function Dashboard() {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4">
                   <h3 className="text-sm font-bold font-dm uppercase tracking-widest text-white">Registered Twins</h3>
-                  <label className="flex items-center gap-2 px-3 py-1.5 bg-[#0F2A25]/30 hover:bg-[#0F2A25]/50 border border-[#00FFB2]/20 hover:border-[#00FFB2]/40 rounded-lg text-[10px] font-mono text-[#00FFB2] cursor-pointer transition duration-200">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                    <span>Mint New Twin (CSV)</span>
-                    <input 
-                      type="file" 
-                      accept=".csv" 
-                      onChange={handleCsvUpload} 
-                      className="hidden" 
-                    />
-                  </label>
+                  <div className="flex gap-2">
+                    <a 
+                      href="/sample_products.csv" 
+                      download
+                      className="flex items-center gap-2 px-3 py-1.5 bg-black/40 hover:bg-white/5 border border-zinc-800 hover:border-zinc-700 rounded-lg text-[10px] font-mono text-zinc-400 hover:text-white cursor-pointer transition duration-200"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                      <span>Template</span>
+                    </a>
+                    
+                    <label className="flex items-center gap-2 px-3 py-1.5 bg-[#0F2A25]/30 hover:bg-[#0F2A25]/50 border border-[#00FFB2]/20 hover:border-[#00FFB2]/40 rounded-lg text-[10px] font-mono text-[#00FFB2] cursor-pointer transition duration-200">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>Mint (CSV)</span>
+                      <input 
+                        type="file" 
+                        accept=".csv" 
+                        onChange={handleCsvUpload} 
+                        className="hidden" 
+                      />
+                    </label>
+                  </div>
                 </div>
                 
                 {/* Status Filter Tab */}

@@ -16,6 +16,8 @@ Selamat datang di repositori utama **Luxtrace**. Repositori ini berisi sistem le
 | **Web Dashboard (Live)** | [https://luxtrace-web-76989259968.asia-southeast1.run.app](https://luxtrace-web-76989259968.asia-southeast1.run.app) |
 | **Kredensial Login (Web)** | `admin@luxtrace.com` (Tersedia tombol **Autofill otomatis** di halaman login!) |
 | **Password** | `password123` |
+| **File Template CSV** | [Download sample_products.csv](./sample_products.csv) (Untuk test batch upload di dashboard) |
+| **Smart Contract Explorer** | [https://thirdweb.com/sepolia/0x6d87293F44D68365De7cE9c29dAF752971237239](https://thirdweb.com/sepolia/0x6d87293F44D68365De7cE9c29dAF752971237239) |
 | **Mobile App (Development)** | Jalankan `npx expo start --clear` di direktori `luxtrace-mobile` |
 
 ---
