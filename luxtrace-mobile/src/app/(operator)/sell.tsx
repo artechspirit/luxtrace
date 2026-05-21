@@ -34,9 +34,12 @@ interface SaleResult {
   product: { brand: string; name: string; serial_number: string }
   buyer: { full_name: string | null; email: string | null }
   amount_idr: number
-  payment_url: string
+  payment_url?: string
   snap_token?: string
+  qr_payload?: string
+  session_id?: string
   expires_at: string
+  sale_mode: 'escrow' | 'direct'
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width
@@ -57,6 +60,7 @@ export default function SellScreen() {
   const [isLoadingProducts, setIsLoadingProducts] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [saleResult, setSaleResult] = useState<SaleResult | null>(null)
+  const [saleMode, setSaleMode] = useState<'escrow' | 'direct'>('escrow')
 
   const formatPrice = (idr: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(idr)
@@ -125,6 +129,7 @@ export default function SellScreen() {
         body: JSON.stringify({
           product_id: selectedProduct.product_id,
           buyer_email: buyerEmail.trim().toLowerCase(),
+          sale_mode: saleMode,
         }),
       })
       const json = await res.json()
@@ -146,6 +151,7 @@ export default function SellScreen() {
     setSelectedProduct(null)
     setBuyerEmail('')
     setSearchQuery('')
+    setSaleMode('escrow')
   }
 
   // ── SUCCESS STATE ──────────────────────────────────────────────────────────
@@ -169,10 +175,10 @@ export default function SellScreen() {
             <Ionicons name="checkmark-circle" size={52} color="#C9A84C" />
           </View>
           <Text className="text-[#C9A84C] text-[10px] font-jakarta-bold tracking-[2px] mb-1 text-center">
-            SALE INITIATED
+            {saleResult.sale_mode === 'direct' ? 'HANDOVER INITIATED' : 'SALE INITIATED'}
           </Text>
           <Text className="text-white text-base font-jakarta-bold mb-4 text-center">
-            Invoice Ready
+            {saleResult.sale_mode === 'direct' ? 'Ready for Handover' : 'Invoice Ready'}
           </Text>
 
           <View className="flex-row justify-between mb-3 border-b border-white/5 pb-3">
@@ -198,8 +204,37 @@ export default function SellScreen() {
             <Text className="text-[#a0aec0] text-[10px] font-jakarta">{saleResult.order_id}</Text>
           </View>
 
-          {/* ── QR CODE PAYMENT SECTION ─────────────────────────────────── */}
-          {hasPaymentUrl ? (
+          {/* ── QR CODE PAYMENT/HANDOVER SECTION ─────────────────────────── */}
+          {saleResult.sale_mode === 'direct' ? (
+            <View className="items-center mb-5">
+              <Text className="text-[#C9A84C] text-[10px] font-jakarta-bold tracking-[2px] mb-3 text-center">
+                🤝 SCAN QR & TAP NFC TO RECEIVE NFT
+              </Text>
+              <View
+                style={{
+                  padding: 16,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  shadowColor: '#C9A84C',
+                  shadowOpacity: 0.25,
+                  shadowRadius: 20,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 8,
+                }}
+              >
+                <QRCode
+                  value={saleResult.qr_payload || ''}
+                  size={Math.min(qrSize, 220)}
+                  color="#0A0A0A"
+                  backgroundColor="#FFFFFF"
+                  quietZone={8}
+                />
+              </View>
+              <Text className="text-[#718096] text-[9px] font-jakarta text-center mt-3 leading-relaxed">
+                Buyer scans this QR with their Luxtrace app{`\n`}AND taps the physical NFC chip on the product.
+              </Text>
+            </View>
+          ) : hasPaymentUrl ? (
             <View className="items-center mb-5">
               <Text className="text-[#C9A84C] text-[10px] font-jakarta-bold tracking-[2px] mb-3 text-center">
                 📲 SCAN TO PAY · BUYER SCANS THIS QR
@@ -217,7 +252,7 @@ export default function SellScreen() {
                 }}
               >
                 <QRCode
-                  value={saleResult.payment_url}
+                  value={saleResult.payment_url || ''}
                   size={Math.min(qrSize, 220)}
                   color="#0A0A0A"
                   backgroundColor="#FFFFFF"
@@ -289,7 +324,7 @@ export default function SellScreen() {
           INITIATE SALE
         </Text>
         <Text className="text-[#718096] text-xs font-jakarta mb-8 leading-relaxed">
-          Select the luxury item and buyer. A Midtrans payment link will be sent to their phone.
+          Select the luxury item and buyer. Choose whether they pay online or offline via direct handover.
         </Text>
 
         {/* Step 1: Product */}
@@ -368,7 +403,7 @@ export default function SellScreen() {
         </View>
 
         {/* Step 2: Buyer Email */}
-        <View className="bg-[#111111] border border-white/5 rounded-2xl p-6 mb-6">
+        <View className="bg-[#111111] border border-white/5 rounded-2xl p-6 mb-4">
           <Text className="text-[#C9A84C] text-[10px] font-jakarta-bold tracking-[2px] mb-1">
             STEP 2 · BUYER EMAIL ADDRESS
           </Text>
@@ -391,6 +426,70 @@ export default function SellScreen() {
           />
         </View>
 
+        {/* Step 3: Sale Mode */}
+        <View className="bg-[#111111] border border-white/5 rounded-2xl p-6 mb-6">
+          <Text className="text-[#C9A84C] text-[10px] font-jakarta-bold tracking-[2px] mb-1">
+            STEP 3 · SELECT SALE MODE
+          </Text>
+          <Text className="text-[#718096] text-xs font-jakarta mb-5 leading-relaxed">
+            Choose how this purchase is completed. Escrow uses Midtrans payment gateway. Direct Handover is for cash/offline payment.
+          </Text>
+          
+          <View className="flex-row gap-3">
+            <TouchableOpacity
+              className={`flex-1 p-4 rounded-xl border items-center justify-center ${
+                saleMode === 'escrow'
+                  ? 'border-[#C9A84C] bg-[#1a1508]/30'
+                  : 'border-white/5 bg-[#0A0A0A]'
+              }`}
+              onPress={() => setSaleMode('escrow')}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="card-outline"
+                size={20}
+                color={saleMode === 'escrow' ? '#C9A84C' : '#718096'}
+              />
+              <Text
+                className={`text-[11px] font-jakarta-bold tracking-wider mt-2 ${
+                  saleMode === 'escrow' ? 'text-white' : 'text-[#718096]'
+                }`}
+              >
+                ESCROW (MIDTRANS)
+              </Text>
+              <Text className="text-[#4a5568] text-[8px] font-jakarta text-center mt-1">
+                Online Pay via Midtrans
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className={`flex-1 p-4 rounded-xl border items-center justify-center ${
+                saleMode === 'direct'
+                  ? 'border-[#C9A84C] bg-[#1a1508]/30'
+                  : 'border-white/5 bg-[#0A0A0A]'
+              }`}
+              onPress={() => setSaleMode('direct')}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="people-outline"
+                size={20}
+                color={saleMode === 'direct' ? '#C9A84C' : '#718096'}
+              />
+              <Text
+                className={`text-[11px] font-jakarta-bold tracking-wider mt-2 ${
+                  saleMode === 'direct' ? 'text-white' : 'text-[#718096]'
+                }`}
+              >
+                DIRECT HANDOVER
+              </Text>
+              <Text className="text-[#4a5568] text-[8px] font-jakarta text-center mt-1">
+                Cash / Offline Payment
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Submit */}
         <TouchableOpacity
           className={`bg-[#C9A84C] rounded-xl h-12 items-center justify-center shadow-md ${
@@ -404,14 +503,15 @@ export default function SellScreen() {
             <ActivityIndicator color="#0A0A0A" size="small" />
           ) : (
             <Text className="text-[#0A0A0A] text-[11px] font-jakarta-bold tracking-[1.5px]">
-              SEND PAYMENT INVOICE TO BUYER
+              {saleMode === 'direct' ? 'GENERATE HANDOVER QR CODE' : 'SEND PAYMENT INVOICE TO BUYER'}
             </Text>
           )}
         </TouchableOpacity>
 
         <Text className="text-[#4a5568] text-[9px] font-jakarta-semibold text-center mt-4 leading-relaxed">
-          After confirmation, the buyer receives a push notification with their Midtrans payment link.
-          NFT is transferred automatically upon payment.
+          {saleMode === 'direct'
+            ? 'After confirmation, a QR code is generated. The buyer scans it and taps the product\'s NFC to transfer the digital twin NFT.'
+            : 'After confirmation, the buyer receives a push notification with their Midtrans payment link. NFT is transferred automatically upon payment.'}
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

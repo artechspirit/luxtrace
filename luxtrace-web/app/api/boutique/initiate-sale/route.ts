@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { paymentService } from '@/services/payment.service'
+import { transactionService } from '@/services/transaction.service'
 import { profileRepository } from '@/repositories/profile.repository'
 import { productRepository } from '@/repositories/product.repository'
 import { notificationService } from '@/services/notification.service'
@@ -50,13 +51,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { product_id, buyer_id, buyer_email } = body
+    const { product_id, buyer_id, buyer_email, sale_mode = 'escrow' } = body
 
     if (!product_id) {
       return err('INVALID_PAYLOAD', 'product_id is required', 422)
     }
     if (!buyer_id && !buyer_email) {
       return err('INVALID_PAYLOAD', 'buyer_id or buyer_email is required', 422)
+    }
+    if (sale_mode !== 'escrow' && sale_mode !== 'direct') {
+      return err('INVALID_PAYLOAD', 'sale_mode must be "escrow" or "direct"', 422)
     }
 
     // 1. Resolve buyer
@@ -82,17 +86,48 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 3. Create Midtrans Snap invoice via paymentService
+    // 3. Handle based on sale_mode
+    const buyer = await profileRepository.findByUserId(resolvedBuyerId)
+
+    if (sale_mode === 'direct') {
+      const directResult = await transactionService.initiatePrimaryDirectHandover(
+        product_id,
+        resolvedBuyerId
+      )
+
+      return ok(
+        {
+          transaction_id: directResult.transaction.transaction_id,
+          order_id: `LUX-${directResult.transaction.transaction_id}`,
+          product: {
+            product_id: product.product_id,
+            brand: product.brand,
+            name: product.name,
+            serial_number: product.serial_number,
+          },
+          buyer: buyer
+            ? { full_name: buyer.full_name, email: buyer.email }
+            : { full_name: null, email: null },
+          amount_idr: product.price_idr,
+          qr_payload: directResult.qr_payload,
+          session_id: directResult.session_id,
+          expires_at: directResult.expires_at,
+          sale_mode: 'direct',
+          initiated_by: user.user_id,
+          note: 'Boutique direct handover initiated. Show the QR to the buyer.',
+        },
+        201
+      )
+    }
+
+    // Default: sale_mode === 'escrow'
     const paymentResult = await paymentService.createPayment({
       type: 'PRIMARY_BOUTIQUE',
       productId: product_id,
       buyerId: resolvedBuyerId,
     })
 
-    // 4. Load buyer profile for notification
-    const buyer = await profileRepository.findByUserId(resolvedBuyerId)
-
-    // 5. Send push notification to buyer with payment link
+    // Send push notification to buyer with payment link
     if (buyer) {
       notificationService
         .sendPushNotification(
@@ -120,6 +155,7 @@ export async function POST(request: NextRequest) {
         payment_url: paymentResult.payment_url,
         snap_token: paymentResult.snap_token,
         expires_at: paymentResult.expires_at,
+        sale_mode: 'escrow',
         initiated_by: user.user_id,
         note: 'Buyer has been notified via push notification with the payment link.',
       },

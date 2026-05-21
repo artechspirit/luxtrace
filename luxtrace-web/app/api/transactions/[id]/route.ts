@@ -15,9 +15,9 @@ export async function GET(
     const { id } = await context.params
     const tx = await transactionService.getById(id)
 
-    // Guard: only involved parties or admin
+    // Guard: only involved parties or platform staff (admin/operator)
     const isInvolved = tx.buyer_id === user.user_id || tx.seller_id === user.user_id
-    if (!isInvolved && user.role !== 'ADMIN') return forbidden()
+    if (!isInvolved && user.role !== 'ADMIN' && user.role !== 'OPERATOR') return forbidden()
 
     return ok(tx)
   } catch (error: unknown) {

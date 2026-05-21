@@ -86,6 +86,7 @@ export default function RootLayout() {
         <Stack.Screen name="(operator)" />
         <Stack.Screen name="(consumer)/scan" options={{ presentation: 'modal' }} />
         <Stack.Screen name="products/[id]" />
+        <Stack.Screen name="transactions/[id]" />
       </Stack>
     </ThemeProvider>
   );

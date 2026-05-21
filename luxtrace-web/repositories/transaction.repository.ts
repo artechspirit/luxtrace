@@ -5,7 +5,7 @@ export const transactionRepository = {
   async findById(transactionId: string): Promise<Transaction | null> {
     const { data, error } = await supabase
       .from('transactions')
-      .select('*')
+      .select('*, product:products(*)')
       .eq('transaction_id', transactionId)
       .single()
 

@@ -17,6 +17,7 @@ import { useAlertStore } from '@/stores/alertStore'
 import { API_BASE_URL } from '@/constants/config'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Ionicons from '@expo/vector-icons/Ionicons'
+import QRCode from 'react-native-qrcode-svg'
 
 interface Product {
   name: string
@@ -31,7 +32,7 @@ interface Transaction {
   seller_id: string
   amount_idr: number
   status: 'PENDING' | 'PAID' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED'
-  type: 'P2P_REMOTE_SHIPPING' | 'P2P_DIRECT_HANDOVER'
+  type: 'P2P_REMOTE_SHIPPING' | 'P2P_DIRECT_HANDOVER' | 'PRIMARY_BOUTIQUE'
   product?: Product
 }
 
@@ -43,6 +44,30 @@ export default function HomeScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [remoteQrSessionId, setRemoteQrSessionId] = useState<string | null>(null)
+  const [isFetchingQr, setIsFetchingQr] = useState(false)
+
+  const handleShowRemoteHandoverQr = async (transactionId: string) => {
+    if (!token) return
+    setIsFetchingQr(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/p2p/remote/${transactionId}/qr`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      const result = await response.json()
+      if (response.ok && result.success) {
+        setRemoteQrSessionId(result.data.session_id)
+      } else {
+        showAlert('Error', result.message || 'Failed to generate handover QR.')
+      }
+    } catch (error: any) {
+      showAlert('Error', error.message || 'Network error occurred.')
+    } finally {
+      setIsFetchingQr(false)
+    }
+  }
 
   const fetchTransactions = async () => {
     if (!token) return
@@ -140,6 +165,12 @@ export default function HomeScreen() {
     const roleLabel = isBuyer ? 'BUYER' : 'SELLER'
     const showAction = isBuyer && (
       (item.type === 'P2P_REMOTE_SHIPPING' && item.status === 'IN_TRANSIT') ||
+      (item.type === 'P2P_DIRECT_HANDOVER' && item.status === 'PENDING') ||
+      (item.type === 'PRIMARY_BOUTIQUE' && (item.status === 'PAID' || item.status === 'IN_TRANSIT'))
+    )
+
+    const showSellerAction = !isBuyer && (
+      (item.type === 'P2P_REMOTE_SHIPPING' && (item.status === 'PAID' || item.status === 'IN_TRANSIT')) ||
       (item.type === 'P2P_DIRECT_HANDOVER' && item.status === 'PENDING')
     )
 
@@ -191,17 +222,41 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        {showAction && (
+        <View className="flex-row gap-3 mt-4">
           <TouchableOpacity
-            className="bg-[#00FFB2] rounded-xl h-11 items-center justify-center mt-4 shadow-md shadow-[#00FFB2]/20"
-            onPress={() => router.push('/scan')}
+            className="flex-1 bg-transparent border border-[#00FFB2]/30 rounded-xl h-11 items-center justify-center"
+            onPress={() => router.push(`/transactions/${item.transaction_id}`)}
             activeOpacity={0.8}
           >
-            <Text className="text-[#0A0A0A] text-[11px] font-jakarta-bold tracking-[1.5px]">
-              VERIFY HANDOVER & RELEASE
+            <Text className="text-[#00FFB2] text-[11px] font-jakarta-bold tracking-[1px]">
+              VIEW DETAILS
             </Text>
           </TouchableOpacity>
-        )}
+
+          {showAction && (
+            <TouchableOpacity
+              className="flex-1 bg-[#00FFB2] rounded-xl h-11 items-center justify-center shadow-md shadow-[#00FFB2]/20"
+              onPress={() => router.push(`/transactions/${item.transaction_id}`)}
+              activeOpacity={0.8}
+            >
+              <Text className="text-[#0A0A0A] text-[11px] font-jakarta-bold tracking-[1px]">
+                VERIFY
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {showSellerAction && (
+            <TouchableOpacity
+              className="flex-1 bg-amber-500 rounded-xl h-11 items-center justify-center shadow-md shadow-amber-500/20"
+              onPress={() => router.push(`/transactions/${item.transaction_id}`)}
+              activeOpacity={0.8}
+            >
+              <Text className="text-[#0A0A0A] text-[11px] font-jakarta-bold tracking-[1px]">
+                SHOW QR
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     )
   }
@@ -403,6 +458,72 @@ export default function HomeScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Escrow Remote Shipping Handover QR Modal */}
+      <Modal
+        visible={!!remoteQrSessionId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRemoteQrSessionId(null)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/85 px-6">
+          <View 
+            className="bg-[#111111] border border-amber-500/20 rounded-[24px] p-6 w-full max-w-sm items-center"
+            style={{
+              shadowColor: '#f59e0b',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 20,
+              elevation: 10,
+            }}
+          >
+            <View className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3">
+              <Ionicons name="qr-code-outline" size={24} color="#f59e0b" />
+            </View>
+
+            <Text className="text-amber-500 text-[10px] font-jakarta-bold tracking-[3px] uppercase mb-1">Escrow Handover</Text>
+            <Text className="text-white text-base font-jakarta-bold text-center">SCAN TO RELEASE ESCROW</Text>
+            <Text className="text-[#718096] text-[10px] font-jakarta text-center mt-1 mb-6">
+              Buyer scans this code to confirm physical handover.
+            </Text>
+
+            {remoteQrSessionId && (
+              <View className="bg-white p-4 rounded-2xl mb-6 shadow-lg shadow-amber-500/10">
+                <QRCode
+                  value={JSON.stringify({ session_id: remoteQrSessionId })}
+                  size={200}
+                  backgroundColor="white"
+                  color="black"
+                />
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={() => {
+                if (remoteQrSessionId) {
+                  Clipboard.setString(remoteQrSessionId)
+                  showAlert('Copied', 'Session ID copied to clipboard.')
+                }
+              }}
+              className="bg-amber-950/20 border border-amber-500/20 rounded-xl px-4 py-2.5 mb-4 flex-row items-center gap-1.5"
+            >
+              <Ionicons name="copy-outline" size={12} color="#f59e0b" />
+              <Text className="text-white text-[10px] font-mono select-all">
+                {remoteQrSessionId ? `${remoteQrSessionId.slice(0, 8)}...${remoteQrSessionId.slice(-8)}` : ''}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setRemoteQrSessionId(null)}
+              className="bg-amber-500 w-full h-11 rounded-xl items-center justify-center active:opacity-90 shadow-md shadow-amber-500/20"
+            >
+              <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px] uppercase">
+                DISMISS
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   )

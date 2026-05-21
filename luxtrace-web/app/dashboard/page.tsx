@@ -159,6 +159,12 @@ export default function Dashboard() {
   const [isBoutiqueSubmitting, setIsBoutiqueSubmitting] = useState(false)
   const [isBoutiqueLoadingProducts, setIsBoutiqueLoadingProducts] = useState(false)
   const [qrModal, setQrModal] = useState<{ isOpen: boolean; qrDataUrl: string; saleResult: any | null }>({ isOpen: false, qrDataUrl: '', saleResult: null })
+  const [boutiqueSaleMode, setBoutiqueSaleMode] = useState<'escrow' | 'direct'>('escrow')
+
+  // ─── TRANSACTION DETAILS INSPECTOR STATE ──────────────────────────────────
+  const [selectedTxDetail, setSelectedTxDetail] = useState<any | null>(null)
+  const [txQrDataUrl, setTxQrDataUrl] = useState<string>('')
+  const [isLoadingTxQr, setIsLoadingTxQr] = useState(false)
 
   // Dynamic KPIs calculations from active state
   const totalTwins = products.length
@@ -279,7 +285,7 @@ export default function Dashboard() {
             if (provRes.ok && provData.success) {
               timeline = provData.data.timeline || []
             }
-          } catch (e) {}
+          } catch (e) { }
           return {
             product_id: p.product_id,
             serial_number: p.serial_number,
@@ -374,7 +380,7 @@ export default function Dashboard() {
             if (provRes.ok && provData.success) {
               timeline = provData.data.timeline || []
             }
-          } catch (e) {}
+          } catch (e) { }
           return {
             product_id: p.product_id,
             serial_number: p.serial_number,
@@ -461,6 +467,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           product_id: selectedBoutiqueProduct.product_id,
           buyer_email: boutiqueBuyerEmail.trim().toLowerCase(),
+          sale_mode: boutiqueSaleMode,
         }),
       })
       const json = await res.json()
@@ -470,16 +477,27 @@ export default function Dashboard() {
         return
       }
 
-      // Generate QR code from payment_url
-      const paymentUrl = json.data.payment_url
+      // Generate QR code based on boutiqueSaleMode
       let qrDataUrl = ''
-      if (paymentUrl) {
-        qrDataUrl = await QRCode.toDataURL(paymentUrl, {
-          width: 280,
-          margin: 2,
-          color: { dark: '#0A0A0A', light: '#FFFFFF' },
-          errorCorrectionLevel: 'M',
-        })
+      if (boutiqueSaleMode === 'direct') {
+        if (json.data.session_id) {
+          qrDataUrl = await QRCode.toDataURL(JSON.stringify({ session_id: json.data.session_id }), {
+            width: 280,
+            margin: 2,
+            color: { dark: '#0A0A0A', light: '#FFFFFF' },
+            errorCorrectionLevel: 'M',
+          })
+        }
+      } else {
+        const paymentUrl = json.data.payment_url
+        if (paymentUrl) {
+          qrDataUrl = await QRCode.toDataURL(paymentUrl, {
+            width: 280,
+            margin: 2,
+            color: { dark: '#0A0A0A', light: '#FFFFFF' },
+            errorCorrectionLevel: 'M',
+          })
+        }
       }
 
       setQrModal({ isOpen: true, qrDataUrl, saleResult: json.data })
@@ -495,6 +513,84 @@ export default function Dashboard() {
     setSelectedBoutiqueProduct(null)
     setBoutiqueBuyerEmail('')
     setBoutiqueSearch('')
+    setBoutiqueSaleMode('escrow')
+  }
+
+  const handleInspectTransaction = async (txId: string) => {
+    setSelectedTxDetail(null)
+    setTxQrDataUrl('')
+    setIsLoadingTxQr(false)
+
+    const token = localStorage.getItem('luxtrace_token')
+    if (!token) return
+
+    setLoaderTitle('Fetching Transaction Details')
+    setLoaderMessage('Reading transaction status and joining ledger record...')
+    setIsLoaderOpen(true)
+
+    try {
+      const txRes = await fetch(`/api/transactions/${txId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const txData = await txRes.json()
+      if (!txRes.ok || !txData.success) {
+        throw new Error(txData.message || 'Failed to fetch transaction details')
+      }
+
+      const tx = txData.data
+      setSelectedTxDetail(tx)
+      setIsLoaderOpen(false)
+
+      const isP2PEscrowPending = tx.type === 'P2P_REMOTE_SHIPPING' && tx.status === 'PENDING'
+
+      if (isP2PEscrowPending) {
+        if (tx.payment_url) {
+          setIsLoadingTxQr(true)
+          try {
+            const dataUrl = await QRCode.toDataURL(tx.payment_url, {
+              width: 200,
+              margin: 1,
+              color: { dark: '#000000', light: '#FFFFFF' }
+            })
+            setTxQrDataUrl(dataUrl)
+          } catch (qrErr) {
+            console.error('Failed to generate Midtrans payment QR:', qrErr)
+          } finally {
+            setIsLoadingTxQr(false)
+          }
+        }
+      } else {
+        const canHaveProximityQr =
+          (tx.type === 'PRIMARY_BOUTIQUE' && tx.status === 'PENDING') ||
+          (tx.type === 'P2P_DIRECT_HANDOVER' && tx.status === 'PENDING') ||
+          (tx.type === 'P2P_REMOTE_SHIPPING' && (tx.status === 'PAID' || tx.status === 'IN_TRANSIT'))
+
+        if (canHaveProximityQr) {
+          setIsLoadingTxQr(true)
+          try {
+            const qrRes = await fetch(`/api/transactions/${txId}/qr`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            })
+            const qrData = await qrRes.json()
+            if (qrRes.ok && qrData.success && qrData.data?.session_id) {
+              const dataUrl = await QRCode.toDataURL(JSON.stringify({ session_id: qrData.data.session_id }), {
+                width: 200,
+                margin: 1,
+                color: { dark: '#000000', light: '#FFFFFF' }
+              })
+              setTxQrDataUrl(dataUrl)
+            }
+          } catch (qrErr) {
+            console.warn('Failed to fetch QR details for transaction inspect:', qrErr)
+          } finally {
+            setIsLoadingTxQr(false)
+          }
+        }
+      }
+    } catch (err: any) {
+      setIsLoaderOpen(false)
+      showAlert('Error Inspecting Transaction', err.message || 'Transaction details unavailable', 'error')
+    }
   }
 
   // ─── INTEGRATED SIMULATION HANDLERS ──────────────────────────────────────────
@@ -531,8 +627,8 @@ export default function Dashboard() {
           if (targetTx) {
             setProducts(prev => prev.map(p => {
               if (p.product_id === targetTx.product_id) {
-                const updatedP = { 
-                  ...p, 
+                const updatedP = {
+                  ...p,
                   status: 'OWNED',
                   timeline: [
                     ...p.timeline,
@@ -608,27 +704,39 @@ export default function Dashboard() {
         }
         const scannedUid = nfcDebugData.data.nfc_uid
 
-        // 2. Generate active QR session via API
-        const qrRes = await fetch(`/api/p2p/remote/${txId}/qr`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        const qrData = await qrRes.json()
-        if (!qrRes.ok || !qrData.success) {
-          throw new Error(qrData.error?.message || 'Failed to generate active QR session')
-        }
-        const sessionId = qrData.data.session_id
-
-        // 3. Post to verify endpoint (remote P2P shipping or direct handover)
         const isDirect = targetTx.type === 'P2P_DIRECT_HANDOVER'
-        const verifyRes = await fetch('/api/p2p/verify', {
-          method: 'POST',
-          headers: getSecurityHeaders(token),
-          body: JSON.stringify({
-            session_id: sessionId,
-            scanned_uid: scannedUid,
-            mode: isDirect ? 'direct' : 'remote'
+        let verifyRes
+        if (isDirect) {
+          // Direct P2P verification uses the dedicated direct-verify endpoint
+          verifyRes = await fetch(`/api/transactions/${txId}/direct-verify`, {
+            method: 'POST',
+            headers: getSecurityHeaders(token),
+            body: JSON.stringify({
+              scanned_uid: scannedUid
+            })
           })
-        })
+        } else {
+          // Remote P2P generates the active QR session then release escrow
+          const qrRes = await fetch(`/api/p2p/remote/${txId}/qr`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          const qrData = await qrRes.json()
+          if (!qrRes.ok || !qrData.success) {
+            throw new Error(qrData.error?.message || 'Failed to generate active QR session')
+          }
+          const sessionId = qrData.data.session_id
+
+          verifyRes = await fetch('/api/p2p/verify', {
+            method: 'POST',
+            headers: getSecurityHeaders(token),
+            body: JSON.stringify({
+              session_id: sessionId,
+              scanned_uid: scannedUid,
+              mode: 'remote'
+            })
+          })
+        }
+
         const verifyData = await verifyRes.json()
         if (!verifyRes.ok || !verifyData.success) {
           throw new Error(verifyData.error?.message || 'NFC verification match check failed')
@@ -715,16 +823,16 @@ export default function Dashboard() {
       while (!isCompleted && attempts < 40) {
         attempts++
         await new Promise((resolve) => setTimeout(resolve, 3000))
-        
+
         const pollRes = await fetch(`/api/products/batch/${batchId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         const pollData = await pollRes.json()
-        
+
         if (pollRes.ok && pollData.success) {
           const batch = pollData.data
           setLoaderMessage(`Ethereum Sepolia Finality: Processing ${batch.processed} of ${batch.total_submitted} items...`)
-          
+
           if (batch.status === 'COMPLETED' || batch.status === 'FAILED') {
             isCompleted = true
             if (batch.failed && batch.failed.length > 0) {
@@ -749,15 +857,15 @@ export default function Dashboard() {
 
   // ─── FILTER PRODUCTS ───────────────────────────────────────────────────────
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.serial_number.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch = p.serial_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesFilter = productStatusFilter === 'ALL' || p.status === productStatusFilter
     return matchesSearch && matchesFilter
   })
 
   return (
     <div className="flex min-h-screen bg-[#0A0A0A] font-sans antialiased text-[#ededed]">
-      
+
       {/* ─── SIDEBAR ───────────────────────────────────────────────────────────── */}
       <aside className="fixed inset-y-0 left-0 w-64 h-screen border-r border-[#00FFB2]/8 bg-black/40 backdrop-blur-md flex flex-col justify-between p-6 z-30 overflow-y-auto">
         <div>
@@ -774,13 +882,12 @@ export default function Dashboard() {
 
           {/* Navigation */}
           <nav className="space-y-1">
-            <button 
+            <button
               onClick={() => switchTab('dashboard')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${
-                activeTab === 'dashboard'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${activeTab === 'dashboard'
                   ? 'bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]'
                   : 'text-zinc-400 hover:text-white hover:bg-white/3'
-              }`}
+                }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
@@ -788,13 +895,12 @@ export default function Dashboard() {
               <span>Dashboard</span>
             </button>
 
-            <button 
+            <button
               onClick={() => switchTab('products')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${
-                activeTab === 'products'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${activeTab === 'products'
                   ? 'bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]'
                   : 'text-zinc-400 hover:text-white hover:bg-white/3'
-              }`}
+                }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -802,13 +908,12 @@ export default function Dashboard() {
               <span>Asset Registry</span>
             </button>
 
-            <button 
+            <button
               onClick={() => switchTab('transactions')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${
-                activeTab === 'transactions'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${activeTab === 'transactions'
                   ? 'bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]'
                   : 'text-zinc-400 hover:text-white hover:bg-white/3'
-              }`}
+                }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -816,13 +921,12 @@ export default function Dashboard() {
               <span>P2P Escrows</span>
             </button>
 
-            <button 
+            <button
               onClick={() => switchTab('boutique')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${
-                activeTab === 'boutique'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${activeTab === 'boutique'
                   ? 'bg-gradient-to-r from-[#1a0e00] to-[#120a00] border border-[#C9A84C]/30 text-[#C9A84C] shadow-[0_0_15px_rgba(201,168,76,0.08)]'
                   : 'text-zinc-400 hover:text-white hover:bg-white/3'
-              }`}
+                }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -840,7 +944,7 @@ export default function Dashboard() {
               <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-mono">SEPOLIA GATEWAY</span>
             </div>
             <p className="text-xs text-white font-mono truncate mb-1" title={adminUser?.wallet_address || '0xBrand...Custody'}>
-              {adminUser?.wallet_address 
+              {adminUser?.wallet_address
                 ? `${adminUser.wallet_address.slice(0, 6)}...${adminUser.wallet_address.slice(-4)}`
                 : '0xBrand...Custody'}
             </p>
@@ -848,15 +952,15 @@ export default function Dashboard() {
               <p className="text-[11px] font-bold text-white truncate">{adminUser?.full_name || 'System Operator'}</p>
               <p className="text-[9px] text-zinc-500 truncate">{adminUser?.email || 'operator@luxtrace.com'}</p>
             </div>
-             <div className="flex items-center justify-between text-[9px] text-[#00FFB2] font-mono border-t border-white/5 pt-2 mt-2">
+            <div className="flex items-center justify-between text-[9px] text-[#00FFB2] font-mono border-t border-white/5 pt-2 mt-2">
               <span>GAS RELAYER: ACTIVE</span>
               <span className="opacity-60">12s LATENCY</span>
             </div>
             <div className="border-t border-white/5 pt-2 mt-2">
-              <a 
-                href="https://thirdweb.com/sepolia/0x6d87293F44D68365De7cE9c29dAF752971237239" 
-                target="_blank" 
-                rel="noopener noreferrer" 
+              <a
+                href="https://thirdweb.com/sepolia/0x6d87293F44D68365De7cE9c29dAF752971237239"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center justify-between text-[9px] text-zinc-400 hover:text-[#00FFB2] font-mono transition duration-200"
               >
                 <span>CONTRACT EXPLORER ↗</span>
@@ -882,7 +986,7 @@ export default function Dashboard() {
 
       {/* ─── MAIN CONTENT ──────────────────────────────────────────────────────── */}
       <main className="flex-1 ml-64 overflow-y-auto px-10 py-8 space-y-8">
-        
+
         {/* Header */}
         <div className="flex justify-between items-center border-b border-white/5 pb-6">
           <div>
@@ -899,12 +1003,12 @@ export default function Dashboard() {
               {activeTab === 'boutique' && "Select a product and buyer — generate QR payment link for in-store scanning"}
             </p>
           </div>
-          
+
           <div className="flex gap-4 items-center">
             <div className="relative">
-              <input 
-                type="text" 
-                placeholder="Search Serial / Name..." 
+              <input
+                type="text"
+                placeholder="Search Serial / Name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-64 bg-black/40 border border-[#00FFB2]/10 rounded-lg px-4 py-2 text-xs focus:outline-none focus:border-[#00FFB2] transition duration-300 font-sans"
@@ -916,7 +1020,7 @@ export default function Dashboard() {
 
 
 
-            <button 
+            <button
               onClick={() => fileInputRef.current?.click()}
               className="glow-btn px-5 py-2 rounded-lg text-xs font-dm uppercase tracking-wider font-semibold cursor-pointer"
             >
@@ -1005,9 +1109,9 @@ export default function Dashboard() {
                     <line x1="0" y1="190" x2="600" y2="190" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
 
                     <path d="M 0 190 L 100 170 L 200 110 L 300 150 L 400 80 L 500 120 L 600 60 L 600 210 L 0 210 Z" fill="url(#areaGradient)" />
-                    <path d="M 0 190 L 100 170 L 200 110 L 300 150 L 400 80 L 500 120 L 600 60" 
-                          stroke="#00FFB2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" 
-                          style={{ filter: 'drop-shadow(0px 0px 8px rgba(0, 255, 178, 0.5))' }} />
+                    <path d="M 0 190 L 100 170 L 200 110 L 300 150 L 400 80 L 500 120 L 600 60"
+                      stroke="#00FFB2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      style={{ filter: 'drop-shadow(0px 0px 8px rgba(0, 255, 178, 0.5))' }} />
 
                     <circle cx="200" cy="110" r="4" fill="#00FFB2" stroke="#0A0A0A" strokeWidth="1.5" />
                     <circle cx="400" cy="80" r="4" fill="#00FFB2" stroke="#0A0A0A" strokeWidth="1.5" />
@@ -1032,14 +1136,14 @@ export default function Dashboard() {
                   <h3 className="text-xs font-bold font-dm uppercase tracking-widest text-white">Security Integrity</h3>
                   <p className="text-[10px] text-zinc-400 mt-1 font-mono">Percentage match rate of hardware tags</p>
                 </div>
-                
+
                 <div className="flex justify-center items-center py-4 relative">
                   <svg className="w-36 h-36" viewBox="0 0 100 100">
                     <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,0.03)" strokeWidth="6" fill="transparent" />
-                    <circle cx="50" cy="50" r="40" stroke="#00FFB2" strokeWidth="6" fill="transparent" 
-                            strokeDasharray="251.2" strokeDashoffset="12.5" strokeLinecap="round"
-                            transform="rotate(-90 50 50)" 
-                            style={{ filter: 'drop-shadow(0px 0px 5px rgba(0, 255, 178, 0.4))' }} />
+                    <circle cx="50" cy="50" r="40" stroke="#00FFB2" strokeWidth="6" fill="transparent"
+                      strokeDasharray="251.2" strokeDashoffset="12.5" strokeLinecap="round"
+                      transform="rotate(-90 50 50)"
+                      style={{ filter: 'drop-shadow(0px 0px 5px rgba(0, 255, 178, 0.4))' }} />
                     <text x="50" y="55" textAnchor="middle" fill="white" fontSize="16" fontWeight="bold" fontFamily="monospace">95%</text>
                   </svg>
                 </div>
@@ -1080,8 +1184,8 @@ export default function Dashboard() {
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {transactions.slice((dashboardPage - 1) * ITEMS_PER_PAGE, dashboardPage * ITEMS_PER_PAGE).map((tx) => (
-                        <tr 
-                          key={tx.id} 
+                        <tr
+                          key={tx.id}
                           className="hover:bg-white/2 cursor-pointer transition duration-150 group"
                           onClick={() => {
                             const matched = products.find(p => p.product_id === tx.product_id)
@@ -1096,15 +1200,14 @@ export default function Dashboard() {
                           <td className="py-4 px-2 font-mono text-[10px] text-zinc-400">{tx.type}</td>
                           <td className="py-4 px-2 text-right font-mono font-medium">{tx.amount}</td>
                           <td className="py-4 px-2 text-center">
-                            <span className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${
-                              tx.status === 'COMPLETED' 
-                                ? 'bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]' 
-                                : tx.status === 'IN_TRANSIT' 
-                                ? 'bg-amber-400/5 border-amber-400/15 text-amber-400' 
-                                : tx.status === 'PAID'
-                                ? 'bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]'
-                                : 'bg-zinc-400/5 border-zinc-400/15 text-zinc-400'
-                            }`}>
+                            <span className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${tx.status === 'COMPLETED'
+                                ? 'bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]'
+                                : tx.status === 'IN_TRANSIT'
+                                  ? 'bg-amber-400/5 border-amber-400/15 text-amber-400'
+                                  : tx.status === 'PAID'
+                                    ? 'bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]'
+                                    : 'bg-zinc-400/5 border-zinc-400/15 text-zinc-400'
+                              }`}>
                               {tx.status}
                             </span>
                           </td>
@@ -1160,7 +1263,7 @@ export default function Dashboard() {
                   <>
                     <div className="mb-6">
                       <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider block mb-2">Select Active Asset Twin</label>
-                      <select 
+                      <select
                         className="w-full bg-black/40 border border-[#00FFB2]/10 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#00FFB2] text-white"
                         value={selectedProduct.product_id}
                         onChange={(e) => {
@@ -1194,24 +1297,22 @@ export default function Dashboard() {
                         const isLast = index === selectedProduct.timeline.length - 1
                         return (
                           <div key={index} className="relative">
-                            <span className={`absolute -left-[30px] top-1.5 w-3.5 h-3.5 rounded-full border border-black flex items-center justify-center ${
-                              isLast ? 'bg-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.5)]' : 'bg-zinc-800'
-                            }`}>
+                            <span className={`absolute -left-[30px] top-1.5 w-3.5 h-3.5 rounded-full border border-black flex items-center justify-center ${isLast ? 'bg-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.5)]' : 'bg-zinc-800'
+                              }`}>
                               {isLast && <span className="w-1.5 h-1.5 rounded-full bg-black"></span>}
                             </span>
 
                             <div>
                               <div className="flex justify-between items-baseline mb-1">
-                                <span className={`text-[10px] font-mono tracking-widest uppercase font-semibold ${
-                                  isLast ? 'text-[#00FFB2]' : 'text-white'
-                                }`}>
+                                <span className={`text-[10px] font-mono tracking-widest uppercase font-semibold ${isLast ? 'text-[#00FFB2]' : 'text-white'
+                                  }`}>
                                   {log.event}
                                 </span>
                                 <span className="text-[9px] text-zinc-500 font-mono">
                                   {new Date(log.timestamp).toLocaleDateString()}
                                 </span>
                               </div>
-                              
+
                               <div className="bg-black/30 border border-white/5 rounded-lg p-3 text-[11px] text-zinc-400 space-y-1">
                                 <div className="flex justify-between text-[9px] font-mono">
                                   <span>ACTOR: {log.actor_role}</span>
@@ -1238,15 +1339,15 @@ export default function Dashboard() {
         {/* ─── TAB CONTENT: ASSET REGISTRY ──────────────────────────────────────── */}
         {activeTab === 'products' && (
           <div className="grid grid-cols-3 gap-8">
-            
+
             {/* Products registry list (2/3 columns) */}
             <div className="luxury-card rounded-xl p-6 col-span-2 space-y-6 h-fit self-start">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4">
                   <h3 className="text-sm font-bold font-dm uppercase tracking-widest text-white">Registered Twins</h3>
                   <div className="flex gap-2">
-                    <a 
-                      href="/sample_products.csv" 
+                    <a
+                      href="/sample_products.csv"
                       download
                       className="flex items-center gap-2 px-3 py-1.5 bg-black/40 hover:bg-white/5 border border-zinc-800 hover:border-zinc-700 rounded-lg text-[10px] font-mono text-zinc-400 hover:text-white cursor-pointer transition duration-200"
                     >
@@ -1255,33 +1356,32 @@ export default function Dashboard() {
                       </svg>
                       <span>Template</span>
                     </a>
-                    
+
                     <label className="flex items-center gap-2 px-3 py-1.5 bg-[#0F2A25]/30 hover:bg-[#0F2A25]/50 border border-[#00FFB2]/20 hover:border-[#00FFB2]/40 rounded-lg text-[10px] font-mono text-[#00FFB2] cursor-pointer transition duration-200">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                       </svg>
                       <span>Mint (CSV)</span>
-                      <input 
-                        type="file" 
-                        accept=".csv" 
-                        onChange={handleCsvUpload} 
-                        className="hidden" 
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleCsvUpload}
+                        className="hidden"
                       />
                     </label>
                   </div>
                 </div>
-                
+
                 {/* Status Filter Tab */}
                 <div className="flex border border-white/5 rounded-lg overflow-hidden bg-black/40">
                   {['ALL', 'MANUFACTURED', 'REGISTERED', 'OWNED', 'IN_TRANSIT'].map(filter => (
                     <button
                       key={filter}
                       onClick={() => setProductStatusFilter(filter)}
-                      className={`px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider cursor-pointer transition ${
-                        productStatusFilter === filter 
-                          ? 'bg-[#00FFB2]/10 text-[#00FFB2] border-r border-white/5' 
+                      className={`px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider cursor-pointer transition ${productStatusFilter === filter
+                          ? 'bg-[#00FFB2]/10 text-[#00FFB2] border-r border-white/5'
                           : 'text-zinc-500 hover:text-zinc-300'
-                      }`}
+                        }`}
                     >
                       {filter.replace('_', ' ')}
                     </button>
@@ -1301,12 +1401,11 @@ export default function Dashboard() {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {filteredProducts.slice((productsPage - 1) * ITEMS_PER_PAGE, productsPage * ITEMS_PER_PAGE).map((p) => (
-                      <tr 
+                      <tr
                         key={p.product_id}
                         onClick={() => setSelectedProduct(p)}
-                        className={`hover:bg-white/2 cursor-pointer transition duration-150 ${
-                          selectedProduct && selectedProduct.product_id === p.product_id ? 'bg-white/2 border-l border-[#00FFB2]' : ''
-                        }`}
+                        className={`hover:bg-white/2 cursor-pointer transition duration-150 ${selectedProduct && selectedProduct.product_id === p.product_id ? 'bg-white/2 border-l border-[#00FFB2]' : ''
+                          }`}
                       >
                         <td className="py-4 px-2 text-white font-medium">
                           <span className="block font-dm text-sm leading-none mb-1">{p.brand}</span>
@@ -1317,15 +1416,14 @@ export default function Dashboard() {
                           {p.nft_token_id ? `#${p.nft_token_id}` : 'UNMINTED'}
                         </td>
                         <td className="py-4 px-2 text-center">
-                          <span className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${
-                            p.status === 'OWNED' 
-                              ? 'bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]' 
-                              : p.status === 'IN_TRANSIT' 
-                              ? 'bg-amber-400/5 border-amber-400/15 text-amber-400' 
-                              : p.status === 'REGISTERED'
-                              ? 'bg-blue-400/5 border-blue-400/15 text-blue-400'
-                              : 'bg-zinc-400/5 border-zinc-400/15 text-zinc-400'
-                          }`}>
+                          <span className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${p.status === 'OWNED'
+                              ? 'bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]'
+                              : p.status === 'IN_TRANSIT'
+                                ? 'bg-amber-400/5 border-amber-400/15 text-amber-400'
+                                : p.status === 'REGISTERED'
+                                  ? 'bg-blue-400/5 border-blue-400/15 text-blue-400'
+                                  : 'bg-zinc-400/5 border-zinc-400/15 text-zinc-400'
+                            }`}>
                             {p.status}
                           </span>
                         </td>
@@ -1411,30 +1509,28 @@ export default function Dashboard() {
                   {/* Provenance timeline on the same products view */}
                   <div className="luxury-card rounded-xl p-6">
                     <h3 className="text-xs font-bold font-dm uppercase tracking-widest text-white mb-6">Off-Chain Log Audits</h3>
-                    
+
                     <div className="relative pl-6 border-l border-[#00FFB2]/10 space-y-6">
                       {selectedProduct.timeline && selectedProduct.timeline.map((log: any, index: number) => {
                         const isLast = index === selectedProduct.timeline.length - 1
                         return (
                           <div key={index} className="relative">
-                            <span className={`absolute -left-[30px] top-1.5 w-3.5 h-3.5 rounded-full border border-black flex items-center justify-center ${
-                              isLast ? 'bg-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.5)]' : 'bg-zinc-800'
-                            }`}>
+                            <span className={`absolute -left-[30px] top-1.5 w-3.5 h-3.5 rounded-full border border-black flex items-center justify-center ${isLast ? 'bg-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.5)]' : 'bg-zinc-800'
+                              }`}>
                               {isLast && <span className="w-1.5 h-1.5 rounded-full bg-black"></span>}
                             </span>
 
                             <div>
                               <div className="flex justify-between items-baseline mb-1">
-                                <span className={`text-[10px] font-mono tracking-widest uppercase font-semibold ${
-                                  isLast ? 'text-[#00FFB2]' : 'text-white'
-                                }`}>
+                                <span className={`text-[10px] font-mono tracking-widest uppercase font-semibold ${isLast ? 'text-[#00FFB2]' : 'text-white'
+                                  }`}>
                                   {log.event}
                                 </span>
                                 <span className="text-[9px] text-zinc-500 font-mono">
                                   {new Date(log.timestamp).toLocaleDateString()}
                                 </span>
                               </div>
-                              
+
                               <div className="bg-black/30 border border-white/5 rounded-lg p-3 text-[11px] text-zinc-400 space-y-1">
                                 <div className="flex justify-between text-[9px] font-mono">
                                   <span>ACTOR: {log.actor_role}</span>
@@ -1462,7 +1558,7 @@ export default function Dashboard() {
         {/* ─── TAB CONTENT: P2P ESCROWS ────────────────────────────────────────── */}
         {activeTab === 'transactions' && (
           <div className="space-y-6">
-            
+
             {/* Escrow summary KPIs */}
             <div className="grid grid-cols-3 gap-6">
               <div className="luxury-card rounded-xl p-5 relative overflow-hidden">
@@ -1499,7 +1595,7 @@ export default function Dashboard() {
             {/* Escrow operations table */}
             <div className="luxury-card rounded-xl p-6">
               <h3 className="text-sm font-bold font-dm uppercase tracking-widest text-white mb-6">P2P Escrow Ledger</h3>
-              
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
@@ -1523,20 +1619,26 @@ export default function Dashboard() {
                         <td className="py-4 px-2 font-mono text-zinc-400 text-[10px]">{tx.type}</td>
                         <td className="py-4 px-2 text-right font-mono font-medium">{tx.amount}</td>
                         <td className="py-4 px-2 text-center">
-                          <span className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${
-                            tx.status === 'COMPLETED' 
-                              ? 'bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]' 
-                              : tx.status === 'IN_TRANSIT' 
-                              ? 'bg-amber-400/5 border-amber-400/15 text-amber-400' 
-                              : tx.status === 'PAID'
-                              ? 'bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]'
-                              : 'bg-zinc-400/5 border-zinc-400/15 text-zinc-400'
-                          }`}>
+                          <span className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${tx.status === 'COMPLETED'
+                              ? 'bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]'
+                              : tx.status === 'IN_TRANSIT'
+                                ? 'bg-amber-400/5 border-amber-400/15 text-amber-400'
+                                : tx.status === 'PAID'
+                                  ? 'bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]'
+                                  : 'bg-zinc-400/5 border-zinc-400/15 text-zinc-400'
+                            }`}>
                             {tx.status}
                           </span>
                         </td>
                         <td className="py-4 px-2 text-right">
-                          <div className="flex gap-2 justify-end">
+                          <div className="flex gap-2 justify-end items-center">
+                            <button
+                              onClick={() => handleInspectTransaction(tx.id)}
+                              className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-white/10 hover:border-white/20 rounded text-[9px] font-mono text-zinc-300 transition uppercase tracking-wider cursor-pointer"
+                            >
+                              Inspect Details
+                            </button>
+
                             {tx.status === 'PENDING' && (
                               <button
                                 onClick={() => handlePaymentSuccess(tx.id)}
@@ -1565,8 +1667,8 @@ export default function Dashboard() {
                             )}
 
                             {tx.status === 'COMPLETED' && (
-                              <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">
-                                Settled & Audited
+                              <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest pl-2">
+                                Audited
                               </span>
                             )}
                           </div>
@@ -1702,10 +1804,55 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Step 2: Buyer Email */}
+            {/* Step 2: Select Transaction Mode */}
             <div className="luxury-card rounded-xl p-6">
               <div className="mb-5">
-                <span className="text-[10px] text-[#C9A84C] font-mono uppercase tracking-widest block mb-1">STEP 2 · BUYER INFORMATION</span>
+                <span className="text-[10px] text-[#C9A84C] font-mono uppercase tracking-widest block mb-1">STEP 2 · TRANSACTION MODE</span>
+                <h3 className="text-sm font-bold font-dm uppercase tracking-widest text-white">Boutique Sale Mode</h3>
+                <p className="text-[10px] text-zinc-400 mt-1 font-mono">Choose how the buyer wishes to settle the purchase and receive the asset.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setBoutiqueSaleMode('escrow')}
+                  className={`border rounded-xl p-4 text-left transition duration-300 cursor-pointer flex flex-col justify-between h-28 ${boutiqueSaleMode === 'escrow'
+                      ? 'border-[#C9A84C] bg-[#C9A84C]/5 text-white'
+                      : 'border-white/5 bg-black/40 hover:border-white/10 text-zinc-400 hover:text-zinc-300'
+                    }`}
+                >
+                  <div>
+
+                    <span className="text-xs font-bold font-dm uppercase tracking-wider block">Escrow P2P</span>
+                  </div>
+                  <p className="text-[9px] font-mono leading-normal text-zinc-500 mt-1">
+                    Buyer pays via Midtrans QR in-store. NFT is transferred after settlement.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBoutiqueSaleMode('direct')}
+                  className={`border rounded-xl p-4 text-left transition duration-300 cursor-pointer flex flex-col justify-between h-28 ${boutiqueSaleMode === 'direct'
+                      ? 'border-[#C9A84C] bg-[#C9A84C]/5 text-white'
+                      : 'border-white/5 bg-black/40 hover:border-white/10 text-zinc-400 hover:text-zinc-300'
+                    }`}
+                >
+                  <div>
+
+                    <span className="text-xs font-bold font-dm uppercase tracking-wider block">Direct P2P</span>
+                  </div>
+                  <p className="text-[9px] font-mono leading-normal text-zinc-500 mt-1">
+                    Offline payment (cash/card). Buyer scans QR in mobile app and taps NFC immediately.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* Step 3: Buyer Email */}
+            <div className="luxury-card rounded-xl p-6">
+              <div className="mb-5">
+                <span className="text-[10px] text-[#C9A84C] font-mono uppercase tracking-widest block mb-1">STEP 3 · BUYER INFORMATION</span>
                 <h3 className="text-sm font-bold font-dm uppercase tracking-widest text-white">Buyer Email Address</h3>
                 <p className="text-[10px] text-zinc-400 mt-1 font-mono">Buyer must have an active Luxtrace account. Enter their registered email.</p>
               </div>
@@ -1724,11 +1871,10 @@ export default function Dashboard() {
               id="boutique-initiate-sale-btn"
               onClick={handleInitiateBoutiqueSale}
               disabled={!selectedBoutiqueProduct || !boutiqueBuyerEmail || isBoutiqueSubmitting}
-              className={`w-full h-12 rounded-xl text-sm font-dm font-bold uppercase tracking-wider transition duration-200 cursor-pointer ${
-                !selectedBoutiqueProduct || !boutiqueBuyerEmail || isBoutiqueSubmitting
+              className={`w-full h-12 rounded-xl text-sm font-dm font-bold uppercase tracking-wider transition duration-200 cursor-pointer ${!selectedBoutiqueProduct || !boutiqueBuyerEmail || isBoutiqueSubmitting
                   ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-40'
                   : 'bg-[#C9A84C] hover:bg-[#d4b055] text-[#0A0A0A] shadow-[0_0_20px_rgba(201,168,76,0.3)] hover:shadow-[0_0_30px_rgba(201,168,76,0.5)]'
-              }`}
+                }`}
             >
               {isBoutiqueSubmitting ? (
                 <span className="flex items-center justify-center gap-2">
@@ -1738,25 +1884,211 @@ export default function Dashboard() {
                   </svg>
                   Processing...
                 </span>
-              ) : '🏛️ Generate QR Payment Link'}
+              ) : boutiqueSaleMode === 'direct' ? '🤝 Generate Handover QR Code' : '🏛️ Generate QR Payment Link'}
             </button>
 
             <p className="text-center text-[10px] text-zinc-600 font-mono">
-              After submission, a QR code will appear for the buyer to scan & pay in-store via Midtrans.
+              {boutiqueSaleMode === 'direct'
+                ? 'After submission, a QR code will appear for the buyer to scan & trigger direct handover in their Luxtrace mobile app.'
+                : 'After submission, a QR code will appear for the buyer to scan & pay in-store via Midtrans.'
+              }
             </p>
           </div>
         )}
 
       </main>
-      
+
       {/* Hidden file input for global CSV import */}
-      <input 
+      <input
         ref={fileInputRef}
-        type="file" 
-        accept=".csv" 
-        onChange={handleCsvUpload} 
-        className="hidden" 
+        type="file"
+        accept=".csv"
+        onChange={handleCsvUpload}
+        className="hidden"
       />
+
+      {/* ─── TRANSACTION DETAILS INSPECTOR MODAL ─────────────────────────────────── */}
+      {selectedTxDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+          <div className="relative bg-[#0D0D0D] border border-[#00FFB2]/20 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-[0_0_60px_rgba(0,255,178,0.1)]">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-white/5 bg-black/40">
+              <div>
+                <span className="text-[10px] text-[#00FFB2] font-mono uppercase tracking-[0.2em] block mb-1">Ledger Transaction Entry</span>
+                <h2 className="text-sm font-bold font-dm text-white tracking-wide uppercase">
+                  Inspect Tx: <span className="font-mono text-[#00FFB2]">{selectedTxDetail.transaction_id}</span>
+                </h2>
+              </div>
+              <button
+                onClick={() => setSelectedTxDetail(null)}
+                className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:border-white/20 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body (Scrollable) */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs">
+              {/* Primary Overview Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white/2 border border-white/5 rounded-xl p-4">
+                  <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest block mb-1">Transaction Status</span>
+                  <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-mono tracking-wider uppercase border ${selectedTxDetail.status === 'COMPLETED'
+                      ? 'bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]'
+                      : selectedTxDetail.status === 'PAID' || selectedTxDetail.status === 'IN_TRANSIT'
+                        ? 'bg-amber-400/5 border-amber-400/20 text-amber-400'
+                        : 'bg-zinc-400/5 border-zinc-400/15 text-zinc-400'
+                    }`}>
+                    {selectedTxDetail.status}
+                  </span>
+                </div>
+                <div className="bg-white/2 border border-white/5 rounded-xl p-4">
+                  <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest block mb-1">Amount Escrowed</span>
+                  <span className="text-white font-mono font-medium text-sm">
+                    Rp {selectedTxDetail.amount_idr?.toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div className="bg-white/2 border border-white/5 rounded-xl p-4">
+                  <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest block mb-1">Transaction Type</span>
+                  <span className="text-white font-mono text-[11px] block truncate">
+                    {selectedTxDetail.type}
+                  </span>
+                </div>
+                <div className="bg-white/2 border border-white/5 rounded-xl p-4">
+                  <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest block mb-1">Created At</span>
+                  <span className="text-white font-mono text-[11px]">
+                    {new Date(selectedTxDetail.created_at).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Handover or Payment QR Code display */}
+              {txQrDataUrl ? (
+                selectedTxDetail.type === 'P2P_REMOTE_SHIPPING' && selectedTxDetail.status === 'PENDING' ? (
+                  <div className="border border-[#C9A84C]/25 bg-gradient-to-b from-[#14120D] to-[#0D0D0D] rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+                    <div className="w-10 h-10 rounded-full bg-[#C9A84C]/10 border border-[#C9A84C]/20 flex items-center justify-center mb-3">
+                      <svg className="w-5 h-5 text-[#C9A84C]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h4 className="text-xs font-bold font-dm text-[#C9A84C] tracking-widest uppercase mb-1">MIDTRANS ESCROW PAYMENT QR</h4>
+                    <p className="text-[10px] text-zinc-400 max-w-sm mb-5 leading-relaxed">
+                      Scan this QR code using the buyer's camera or use the link below to pay and deposit the funds into escrow.
+                    </p>
+
+                    <div className="bg-white p-3.5 rounded-xl shadow-lg border border-[#C9A84C]/25 mb-5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={txQrDataUrl} alt="Midtrans Payment QR" className="w-[180px] h-[180px] object-contain" />
+                    </div>
+
+                    {selectedTxDetail.payment_url && (
+                      <a
+                        href={selectedTxDetail.payment_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-5 py-2.5 bg-[#C9A84C] hover:bg-[#d4b055] text-[#0A0A0A] font-mono text-[9px] rounded-xl font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(201,168,76,0.2)] transition cursor-pointer"
+                      >
+                        Open Midtrans Checkout ↗
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <div className="border border-[#00FFB2]/20 bg-gradient-to-b from-[#0D1614] to-[#0A0A0A] rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+                    <div className="w-10 h-10 rounded-full bg-[#00FFB2]/10 border border-[#00FFB2]/20 flex items-center justify-center mb-3">
+                      <svg className="w-5 h-5 text-[#00FFB2]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                      </svg>
+                    </div>
+                    <h4 className="text-xs font-bold font-dm text-white tracking-widest uppercase mb-1">PROXIMITY HANDOVER QR</h4>
+                    <p className="text-[10px] text-zinc-400 max-w-sm mb-5 leading-relaxed">
+                      Scan this QR code using the buyer's Luxtrace app during physical proximity checks to verify the product's NFC tag.
+                    </p>
+
+                    <div className="bg-white p-3.5 rounded-xl shadow-lg border border-[#00FFB2]/20 mb-4">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={txQrDataUrl} alt="Handover QR Code" className="w-[180px] h-[180px] object-contain" />
+                    </div>
+
+                    <div className="px-3 py-1.5 rounded-lg bg-black/40 border border-[#00FFB2]/25 font-mono text-[9px] text-[#00FFB2]">
+                      SESSION ENABLED
+                    </div>
+                  </div>
+                )
+              ) : isLoadingTxQr ? (
+                <div className="border border-[#00FFB2]/20 bg-white/2 rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                  <div className="w-6 h-6 border-2 border-[#00FFB2] border-t-transparent rounded-full animate-spin mb-3"></div>
+                  <span className="text-xs text-zinc-400 font-mono">Initializing QR Handover Session...</span>
+                </div>
+              ) : (
+                <div className="border border-white/5 bg-white/2 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+                  <svg className="w-8 h-8 text-zinc-600 mb-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                  <h4 className="text-xs font-bold font-dm text-zinc-400 tracking-widest uppercase mb-1">NO HANDOVER QR AVAILABLE</h4>
+                  <p className="text-[10px] text-zinc-500 max-w-xs mx-auto leading-relaxed">
+                    {selectedTxDetail.status === 'PENDING' && selectedTxDetail.type === 'P2P_REMOTE_SHIPPING'
+                      ? 'Awaiting deposit from the buyer. Handover QR becomes available once escrow is paid.'
+                      : 'This transaction is not in a state that requires a physical handover QR verification.'}
+                  </p>
+                </div>
+              )}
+
+              {/* Product Specifications Section */}
+              {selectedTxDetail.product && (
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold font-dm uppercase tracking-widest text-white">Asset Twin Specifications</h3>
+                  <div className="bg-white/2 border border-white/5 rounded-xl p-5 space-y-4">
+                    <div>
+                      <span className="text-[9px] text-[#00FFB2] font-mono uppercase tracking-wider block mb-1">
+                        {selectedTxDetail.product.brand}
+                      </span>
+                      <span className="text-white text-base font-bold font-dm">{selectedTxDetail.product.name}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-3">
+                      <div>
+                        <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest block">Serial Number</span>
+                        <span className="text-zinc-300 font-mono text-[11px]">{selectedTxDetail.product.serial_number}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest block">NFT Token ID</span>
+                        <span className="text-zinc-300 font-mono text-[11px]">
+                          {selectedTxDetail.product.nft_token_id ? `#${selectedTxDetail.product.nft_token_id}` : 'MINT PENDING'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Participant Information */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-bold font-dm uppercase tracking-widest text-white">Participants</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white/2 border border-white/5 rounded-xl p-4">
+                    <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest block mb-1">Seller ID</span>
+                    <span className="text-white font-mono text-[10px] block truncate">{selectedTxDetail.seller_id || 'BRAND BOUTIQUE'}</span>
+                  </div>
+                  <div className="bg-white/2 border border-white/5 rounded-xl p-4">
+                    <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest block mb-1">Buyer ID</span>
+                    <span className="text-white font-mono text-[10px] block truncate">{selectedTxDetail.buyer_id}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-white/5 bg-black/40 flex justify-end gap-3">
+              <button
+                onClick={() => setSelectedTxDetail(null)}
+                className="px-5 py-2 bg-zinc-850 hover:bg-zinc-800 text-white font-mono text-xs rounded-xl border border-white/5 hover:border-white/10 transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── QR CODE PAYMENT MODAL ─────────────────────────────────────────────── */}
       {qrModal.isOpen && (
@@ -1779,9 +2111,15 @@ export default function Dashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <p className="text-[#C9A84C] text-[10px] font-mono uppercase tracking-[3px] mb-1">Sale Initiated</p>
-              <h2 className="text-white text-lg font-dm font-bold uppercase tracking-wide">Payment QR Code</h2>
-              <p className="text-zinc-400 text-xs font-mono mt-1">Buyer scans this to complete payment</p>
+              <p className="text-[#C9A84C] text-[10px] font-mono uppercase tracking-[3px] mb-1">
+                {qrModal.saleResult?.sale_mode === 'direct' ? 'Direct Handover' : 'Sale Initiated'}
+              </p>
+              <h2 className="text-white text-lg font-dm font-bold uppercase tracking-wide">
+                {qrModal.saleResult?.sale_mode === 'direct' ? 'Handover QR Code' : 'Payment QR Code'}
+              </h2>
+              <p className="text-zinc-400 text-xs font-mono mt-1">
+                {qrModal.saleResult?.sale_mode === 'direct' ? 'Buyer scans this in Luxtrace mobile app' : 'Buyer scans this to complete payment'}
+              </p>
             </div>
 
             {/* QR Code */}
@@ -1792,7 +2130,10 @@ export default function Dashboard() {
                   <img src={qrModal.qrDataUrl} alt="Payment QR Code" width={240} height={240} />
                 </div>
                 <p className="text-zinc-500 text-[10px] font-mono mt-3 text-center">
-                  📲 Point buyer&apos;s camera at this code to open Midtrans checkout
+                  {qrModal.saleResult?.sale_mode === 'direct'
+                    ? '📲 Point buyer\'s in-app QR scanner to authorize direct handover & verify product'
+                    : '📲 Point buyer\'s camera at this code to open Midtrans checkout'
+                  }
                 </p>
               </div>
             ) : (
@@ -1843,7 +2184,7 @@ export default function Dashboard() {
       <Loader isOpen={isLoaderOpen} title={loaderTitle} message={loaderMessage} />
 
       {/* ─── PREMIUM ALERT DIALOG ──────────────────────────────────────────────── */}
-      <Alert 
+      <Alert
         isOpen={alertConfig.isOpen}
         type={alertConfig.type}
         title={alertConfig.title}

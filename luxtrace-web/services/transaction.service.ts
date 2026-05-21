@@ -6,20 +6,78 @@ import { qrSessionRepository } from '@/repositories/qr-session.repository'
 import { nfcService } from '@/services/nfc.service'
 import { blockchainService } from '@/services/blockchain.service'
 import { paymentService } from '@/services/payment.service'
-import { refundTransaction } from '@/lib/midtrans'
+import { refundTransaction, createSnapInvoice } from '@/lib/midtrans'
 import { notificationService } from '@/services/notification.service'
 import type { Transaction } from '@/types'
 
 export const transactionService = {
-  async getById(transactionId: string): Promise<Transaction> {
+  async getById(transactionId: string): Promise<Transaction & { payment_url?: string }> {
     const tx = await transactionRepository.findById(transactionId)
     if (!tx) throw Object.assign(new Error('Transaction not found'), { code: 'NOT_FOUND' })
+
+    // If pending and supports payment, generate payment URL dynamically
+    if (tx.status === 'PENDING' && (tx.type === 'P2P_REMOTE_SHIPPING' || tx.type === 'PRIMARY_BOUTIQUE')) {
+      try {
+        const buyer = await profileRepository.findByUserId(tx.buyer_id)
+        const product = (tx as any).product
+        if (buyer && product) {
+          const orderId = tx.payment_ref || `LUX-${tx.transaction_id}`
+          const itemName = `${product.brand} — ${product.name}`
+          const snapResult = await createSnapInvoice({
+            orderId,
+            amountIdr: tx.amount_idr,
+            customerName: buyer.full_name || buyer.email.split('@')[0],
+            customerEmail: buyer.email,
+            itemId: tx.product_id,
+            itemName,
+          })
+          return {
+            ...tx,
+            payment_url: snapResult.redirect_url
+          }
+        }
+      } catch (err) {
+        console.error('Failed to dynamically fetch/create Midtrans Snap URL in getById:', err)
+      }
+    }
+
     return tx
   },
 
   /** PRIMARY_BOUTIQUE: delegates to paymentService */
   async initiatePrimaryPurchase(productId: string, buyerId: string) {
     return paymentService.createPayment({ type: 'PRIMARY_BOUTIQUE', productId, buyerId })
+  },
+
+  /** PRIMARY_BOUTIQUE: Direct Handover (Cash / Non-Escrow) */
+  async initiatePrimaryDirectHandover(productId: string, buyerId: string) {
+    const product = await productRepository.findById(productId)
+    if (!product) throw Object.assign(new Error('Product not found'), { code: 'NOT_FOUND' })
+    if (product.status !== 'REGISTERED') {
+      throw Object.assign(
+        new Error(`Product is not available for boutique sale (status: ${product.status})`),
+        { code: 'PRODUCT_NOT_AVAILABLE' }
+      )
+    }
+
+    const tx = await transactionRepository.create({
+      type: 'PRIMARY_BOUTIQUE',
+      product_id: productId,
+      seller_id: null,
+      buyer_id: buyerId,
+      amount_idr: product.price_idr,
+    })
+
+    const qr = await nfcService.generateQrPayload(tx.transaction_id, productId, 5 * 60 * 1000)
+
+    // Notify buyer of direct handover request
+    notificationService.sendPushNotification(
+      buyerId,
+      '🏛️ Boutique Direct Handover',
+      `Staff has initiated a direct handover of ${product.brand} ${product.name}. Scan the QR and tap the NFC tag to claim ownership.`
+    ).catch(err => console.error('Failed to notify buyer of boutique direct handover:', err))
+
+    return { transaction: tx, ...qr }
   },
 
   // ─── P2P Remote Shipping ────────────────────────────────────────────────────
@@ -79,21 +137,33 @@ export const transactionService = {
     const tx = await transactionRepository.findById(transactionId)
     if (!tx) throw Object.assign(new Error('Transaction not found'), { code: 'NOT_FOUND' })
 
-    if (tx.seller_id !== callerId) {
-      throw Object.assign(new Error('Only the seller can generate handover QR'), { code: 'FORBIDDEN' })
-    }
+    const callerProfile = await profileRepository.findByUserId(callerId)
+    const isPlatformStaff = callerProfile && (callerProfile.role === 'ADMIN' || callerProfile.role === 'OPERATOR')
 
-    if (tx.status !== 'PAID' && tx.status !== 'IN_TRANSIT') {
-      throw Object.assign(
-        new Error('Escrow must be locked (buyer must pay first)'),
-        { code: 'ESCROW_NOT_LOCKED' }
-      )
-    }
-
-    if (tx.type !== 'P2P_REMOTE_SHIPPING') {
-      throw Object.assign(new Error('QR handover only applies to P2P_REMOTE_SHIPPING'), {
-        code: 'INVALID_TRANSACTION_TYPE',
-      })
+    if (tx.type === 'PRIMARY_BOUTIQUE') {
+      if (!isPlatformStaff) {
+        throw Object.assign(new Error('Only operators can generate boutique QR'), { code: 'FORBIDDEN' })
+      }
+      if (tx.status !== 'PENDING') {
+        throw Object.assign(new Error('Transaction is not in PENDING state'), { code: 'INVALID_STATE' })
+      }
+    } else if (tx.type === 'P2P_DIRECT_HANDOVER') {
+      if (tx.seller_id !== callerId && !isPlatformStaff) {
+        throw Object.assign(new Error('Only the seller or platform staff can generate handover QR'), { code: 'FORBIDDEN' })
+      }
+      if (tx.status !== 'PENDING') {
+        throw Object.assign(new Error('Transaction is not in PENDING state'), { code: 'INVALID_STATE' })
+      }
+    } else { // P2P_REMOTE_SHIPPING
+      if (tx.seller_id !== callerId && !isPlatformStaff) {
+        throw Object.assign(new Error('Only the seller or platform staff can generate handover QR'), { code: 'FORBIDDEN' })
+      }
+      if (tx.status !== 'PAID' && tx.status !== 'IN_TRANSIT') {
+        throw Object.assign(
+          new Error('Escrow must be locked (buyer must pay first)'),
+          { code: 'ESCROW_NOT_LOCKED' }
+        )
+      }
     }
 
     const { qr_payload, session_id, expires_at } = await nfcService.generateQrPayload(
@@ -331,6 +401,7 @@ export const transactionService = {
   /**
    * Direct Handover: buyer verifies NFC proximity — no escrow.
    * Uses same session validation as remote shipping.
+   * Works for both P2P_DIRECT_HANDOVER and PRIMARY_BOUTIQUE direct handover.
    */
   async verifyDirectHandover(
     sessionId: string,
@@ -362,21 +433,29 @@ export const transactionService = {
       throw Object.assign(new Error('NFC mismatch'), { code: 'NFC_MISMATCH' })
     }
 
-    const seller = await profileRepository.findByUserId(tx.seller_id!)
     const buyer = await profileRepository.findByUserId(tx.buyer_id)
     const product = await productRepository.findById(productId)
-    if (!seller || !buyer || !product) throw new Error('Data integrity error')
+    if (!buyer || !product) throw new Error('Data integrity error')
+
+    let fromWallet: string
+    if (tx.type === 'PRIMARY_BOUTIQUE') {
+      fromWallet = process.env.BRAND_WALLET_ADDRESS!
+    } else {
+      const seller = await profileRepository.findByUserId(tx.seller_id!)
+      if (!seller) throw new Error('Data integrity error: missing seller')
+      fromWallet = seller.wallet_address
+    }
 
     let tx_hash: string
     try {
       const result = await blockchainService.transferNFT(
-        seller.wallet_address,
+        fromWallet,
         buyer.wallet_address,
         product.nft_token_id!
       )
       tx_hash = result.tx_hash
     } catch (nftErr) {
-      console.error('[P2P Direct] NFT transfer failed:', nftErr)
+      console.error('[Direct Handover] NFT transfer failed:', nftErr)
       await transactionRepository.updateStatus(transactionId, 'CANCELLED')
       throw Object.assign(new Error('NFT transfer failed'), { code: 'NFT_TRANSFER_FAILED' })
     }
@@ -386,44 +465,54 @@ export const transactionService = {
       blockchain_tx_hash: tx_hash,
       completed_at: new Date().toISOString(),
     })
+
+    const event = tx.type === 'PRIMARY_BOUTIQUE' ? 'BRAND_OUTLET' : 'TRANSFERRED'
     await productLogRepository.insert({
       product_id: productId,
-      event: 'TRANSFERRED',
+      event,
       actor_id: callerId,
       actor_role: 'CONSUMER',
       metadata: {
         transaction_id: transactionId,
-        via: 'P2P_DIRECT_HANDOVER',
+        via: tx.type,
         tx_hash,
-        from_wallet: seller.wallet_address,
+        from_wallet: fromWallet,
         to_wallet: buyer.wallet_address,
       },
     })
 
-    // Notify buyer and seller of successful handover
-    notificationService.sendPushNotification(
-      tx.buyer_id,
-      'Direct Handover Successful',
-      'Ownership verification complete. Luxury digital twin NFT added to your vault!'
-    ).catch(err => console.error('Failed to notify buyer:', err))
+    if (tx.type === 'PRIMARY_BOUTIQUE') {
+      notificationService.sendPushNotification(
+        tx.buyer_id,
+        '🏛️ Boutique Purchase Successful',
+        'Direct handover complete. Digital twin NFT successfully deposited in your custodial wallet!'
+      ).catch(err => console.error('Failed to notify buyer:', err))
+    } else {
+      // Notify buyer and seller of successful handover
+      notificationService.sendPushNotification(
+        tx.buyer_id,
+        'Direct Handover Successful',
+        'Ownership verification complete. Luxury digital twin NFT added to your vault!'
+      ).catch(err => console.error('Failed to notify buyer:', err))
 
-    notificationService.sendPushNotification(
-      tx.seller_id!,
-      'Direct Handover Completed',
-      'Physical asset handover verified. Ownership transferred to the buyer.'
-    ).catch(err => console.error('Failed to notify seller:', err))
+      notificationService.sendPushNotification(
+        tx.seller_id!,
+        'Direct Handover Completed',
+        'Physical asset handover verified. Ownership transferred to the buyer.'
+      ).catch(err => console.error('Failed to notify seller:', err))
+    }
 
     return {
       verified: true,
       transaction_id: transactionId,
       nft_transfer: {
         tx_hash,
-        from_wallet: seller.wallet_address,
+        from_wallet: fromWallet,
         to_wallet: buyer.wallet_address,
         token_id: product.nft_token_id!,
       },
       product_status: 'OWNED',
-      via: 'DIRECT_HANDOVER',
+      via: tx.type === 'PRIMARY_BOUTIQUE' ? 'PRIMARY_BOUTIQUE' : 'DIRECT_HANDOVER',
     }
   },
 
