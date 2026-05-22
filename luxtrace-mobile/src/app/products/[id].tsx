@@ -515,8 +515,8 @@ export default function ProductProvenanceScreen() {
         >
           <KeyboardAvoidingView
             style={{ flex: 1, justifyContent: "flex-end" }}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 24}
+            behavior={Platform.OS === "ios" ? "padding" : "padding"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
           >
             <View
               className="bg-[#111111] border-t border-[#00FFB2]/25 rounded-t-[30px] p-6"

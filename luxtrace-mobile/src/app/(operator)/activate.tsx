@@ -139,7 +139,7 @@ export default function ActivateScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
       className="flex-1"
     >
       <ScrollView
