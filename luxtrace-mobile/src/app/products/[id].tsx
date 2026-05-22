@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { API_BASE_URL } from "@/constants/config";
@@ -51,16 +52,6 @@ export default function ProductProvenanceScreen() {
 
   // P2P Listing States
   const [isOwner, setIsOwner] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [transferMode, setTransferMode] = useState<"remote" | "direct">(
-    "remote",
-  );
-  const [agreedPrice, setAgreedPrice] = useState("");
-  const [buyerEmail, setBuyerEmail] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [directQrSessionId, setDirectQrSessionId] = useState<string | null>(
-    null,
-  );
 
   const checkOwnership = async () => {
     if (!token || !id) return;
@@ -81,117 +72,7 @@ export default function ProductProvenanceScreen() {
     }
   };
 
-  const handleCreateListing = async () => {
-    if (!buyerEmail.trim()) {
-      showAlert("Validation Error", "Please enter the buyer email address.");
-      return;
-    }
 
-    if (
-      transferMode === "remote" &&
-      (!agreedPrice || isNaN(Number(agreedPrice)) || Number(agreedPrice) <= 0)
-    ) {
-      showAlert("Validation Error", "Please enter a valid agreed price (IDR).");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      // 1. Lookup Buyer ID by Email
-      const lookupResponse = await fetch(
-        `${API_BASE_URL}/users/lookup?email=${encodeURIComponent(buyerEmail.trim())}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-      const lookupResult = await lookupResponse.json();
-      if (!lookupResponse.ok || !lookupResult.success) {
-        throw new Error(
-          lookupResult.message ||
-            "Buyer user profile not found. Make sure they are registered.",
-        );
-      }
-
-      const buyerId = lookupResult.data?.user_id;
-      if (!buyerId) {
-        throw new Error("Could not resolve Buyer ID.");
-      }
-
-      // Generate Replay Protection Headers
-      const nonce =
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15);
-      const timestamp = Date.now().toString();
-
-      // 2. Initiate transaction
-      const endpoint =
-        transferMode === "remote" ? "/p2p/remote/init" : "/p2p/direct/init";
-      const payload =
-        transferMode === "remote"
-          ? {
-              product_id: id,
-              buyer_id: buyerId,
-              agreed_price_idr: Number(agreedPrice),
-            }
-          : { product_id: id, buyer_id: buyerId };
-
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "x-nonce": nonce,
-          "x-timestamp": timestamp,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "Transaction initiation failed.");
-      }
-
-      // Auto-copy to clipboard for easier testing
-      if (transferMode === "direct" && result.data?.session_id) {
-        Clipboard.setString(result.data.session_id);
-      }
-
-      // Success
-      if (transferMode === "direct" && result.data?.session_id) {
-        setDirectQrSessionId(result.data.session_id);
-        setIsModalOpen(false);
-        setBuyerEmail("");
-        setAgreedPrice("");
-        fetchProvenance();
-      } else {
-        showAlert(
-          "TRANSACTION INITIATED",
-          `Remote shipping P2P Escrow initialized!\n\nMidtrans Snap URL generated. The buyer must pay the escrow to lock the transaction.`,
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                setIsModalOpen(false);
-                setBuyerEmail("");
-                setAgreedPrice("");
-                fetchProvenance(); // Refresh provenance history
-              },
-            },
-          ],
-        );
-      }
-    } catch (err: any) {
-      showAlert(
-        "Listing Failed",
-        err.message || "Failed to initialize P2P Listing.",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const fetchProvenance = async () => {
     setIsLoading(true);
@@ -491,7 +372,7 @@ export default function ProductProvenanceScreen() {
         >
           <TouchableOpacity
             className="bg-[#00FFB2] h-12 rounded-xl items-center justify-center shadow-lg shadow-[#00FFB2]/20"
-            onPress={() => setIsModalOpen(true)}
+            onPress={() => router.push(`/products/sell?id=${id}`)}
             activeOpacity={0.8}
           >
             <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px]">
@@ -500,217 +381,6 @@ export default function ProductProvenanceScreen() {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* P2P Listing Inception Modal */}
-      <Modal
-        visible={isModalOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsModalOpen(false)}
-      >
-        <TouchableOpacity
-          className="flex-1 justify-end bg-black/60"
-          activeOpacity={1}
-          onPress={() => setIsModalOpen(false)}
-        >
-          <KeyboardAvoidingView
-            style={{ flex: 1, justifyContent: "flex-end" }}
-            behavior={Platform.OS === "ios" ? "padding" : "padding"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-          >
-            <View
-              className="bg-[#111111] border-t border-[#00FFB2]/25 rounded-t-[30px] p-6"
-              style={{
-                width: "100%",
-                maxHeight: "80%",
-                shadowColor: "#00FFB2",
-                shadowOffset: { width: 0, height: -8 },
-                shadowOpacity: 0.2,
-                shadowRadius: 16,
-                elevation: 24,
-              }}
-            >
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={{
-                  paddingBottom: Math.max(insets.bottom + 20, 40),
-                }}
-              >
-                {/* Drag Handle Indicator */}
-                <View
-                  className="w-12 h-1 bg-white/20 rounded-full mb-4"
-                  style={{ alignSelf: "center" }}
-                />
-
-                {/* Modal Header */}
-                <View className="flex-row justify-between items-center mb-6">
-                  <Text className="text-white text-base font-jakarta-bold tracking-wide">
-                    P2P TRANSFER INCEPTION
-                  </Text>
-                  <TouchableOpacity onPress={() => setIsModalOpen(false)}>
-                    <Text className="text-[#718096] text-xs font-jakarta-bold">
-                      CLOSE
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Mode selection toggles */}
-                <View className="flex-row bg-[#0A0A0A] p-1 rounded-xl mb-6 border border-white/5">
-                  <TouchableOpacity
-                    className={`flex-1 py-2.5 rounded-lg items-center ${transferMode === "remote" ? "bg-[#00FFB2]" : ""}`}
-                    onPress={() => setTransferMode("remote")}
-                  >
-                    <Text
-                      className={`text-[10px] font-jakarta-bold tracking-wider ${transferMode === "remote" ? "text-[#0A0A0A]" : "text-[#718096]"}`}
-                    >
-                      REMOTE SHIPPING
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className={`flex-1 py-2.5 rounded-lg items-center ${transferMode === "direct" ? "bg-[#00FFB2]" : ""}`}
-                    onPress={() => setTransferMode("direct")}
-                  >
-                    <Text
-                      className={`text-[10px] font-jakarta-bold tracking-wider ${transferMode === "direct" ? "text-[#0A0A0A]" : "text-[#718096]"}`}
-                    >
-                      DIRECT HANDOVER
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Buyer Email Input */}
-                <View className="mb-5">
-                  <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-2">
-                    BUYER EMAIL ADDRESS
-                  </Text>
-                  <TextInput
-                    className="bg-[#0A0A0A] text-white text-sm px-4 h-12 rounded-xl border border-white/5 font-jakarta"
-                    placeholder="e.g. buyer@example.com"
-                    placeholderTextColor="#4a5568"
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    autoCorrect={false}
-                    value={buyerEmail}
-                    onChangeText={setBuyerEmail}
-                  />
-                  <Text className="text-[#718096] text-[10px] font-jakarta mt-2">
-                    The buyer must have a registered Luxtrace account.
-                  </Text>
-                </View>
-
-                {/* Price input (Only for Remote Shipping) */}
-                {transferMode === "remote" && (
-                  <View className="mb-6">
-                    <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-2">
-                      AGREED PRICE (IDR)
-                    </Text>
-                    <TextInput
-                      className="bg-[#0A0A0A] text-white text-sm px-4 h-12 rounded-xl border border-white/5 font-jakarta"
-                      placeholder="e.g. 50000000"
-                      placeholderTextColor="#4a5568"
-                      keyboardType="numeric"
-                      autoCorrect={false}
-                      value={agreedPrice}
-                      onChangeText={setAgreedPrice}
-                    />
-                    <Text className="text-[#718096] text-[10px] font-jakarta mt-2">
-                      Agreed payment price to be locked in Midtrans escrow.
-                    </Text>
-                  </View>
-                )}
-
-                {/* Submit Button */}
-                <TouchableOpacity
-                  className="bg-[#00FFB2] h-12 rounded-xl items-center justify-center shadow-md shadow-[#00FFB2]/20 flex-row"
-                  onPress={handleCreateListing}
-                  disabled={isSubmitting}
-                  activeOpacity={0.8}
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator color="#0A0A0A" size="small" />
-                  ) : (
-                    <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px]">
-                      INITIATE P2P TRANSACTION
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-          </KeyboardAvoidingView>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Direct Handover QR Modal */}
-      <Modal
-        visible={!!directQrSessionId}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDirectQrSessionId(null)}
-      >
-        <View className="flex-1 justify-center items-center bg-black/85 px-6">
-          <View
-            className="bg-[#111111] border border-[#00FFB2]/20 rounded-[24px] p-6 w-full max-w-sm items-center"
-            style={{
-              shadowColor: "#00FFB2",
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.15,
-              shadowRadius: 20,
-              elevation: 10,
-            }}
-          >
-            <View className="w-12 h-12 rounded-full bg-[#00FFB2]/10 border border-[#00FFB2]/20 flex items-center justify-center mb-3">
-              <Ionicons name="swap-horizontal" size={24} color="#00FFB2" />
-            </View>
-
-            <Text className="text-[#00FFB2] text-[10px] font-jakarta-bold tracking-[3px] uppercase mb-1">
-              Direct Handover
-            </Text>
-            <Text className="text-white text-base font-jakarta-bold text-center">
-              SCAN QR SESSION
-            </Text>
-            <Text className="text-[#718096] text-[10px] font-jakarta text-center mt-1 mb-6">
-              Buyer scans this to initiate the physical proximity NFC scan.
-            </Text>
-
-            {directQrSessionId && (
-              <View className="bg-white p-4 rounded-2xl mb-6 shadow-lg shadow-[#00FFB2]/10">
-                <QRCode
-                  value={JSON.stringify({ session_id: directQrSessionId })}
-                  size={200}
-                  backgroundColor="white"
-                  color="black"
-                />
-              </View>
-            )}
-
-            <TouchableOpacity
-              onPress={() => {
-                if (directQrSessionId) {
-                  Clipboard.setString(directQrSessionId);
-                  showAlert("Copied", "Session ID copied to clipboard.");
-                }
-              }}
-              className="bg-[#141e1c]/40 border border-[#00FFB2]/20 rounded-xl px-4 py-2.5 mb-4 flex-row items-center gap-1.5"
-            >
-              <Ionicons name="copy-outline" size={12} color="#00FFB2" />
-              <Text className="text-white text-[10px] font-mono select-all">
-                {directQrSessionId
-                  ? `${directQrSessionId.slice(0, 8)}...${directQrSessionId.slice(-8)}`
-                  : ""}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setDirectQrSessionId(null)}
-              className="bg-[#00FFB2] w-full h-11 rounded-xl items-center justify-center active:opacity-90 shadow-md shadow-[#00FFB2]/20"
-            >
-              <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px] uppercase">
-                DISMISS
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
