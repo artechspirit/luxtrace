@@ -514,121 +514,128 @@ export default function ProductProvenanceScreen() {
           onPress={() => setIsModalOpen(false)}
         >
           <KeyboardAvoidingView
+            style={{ flex: 1, justifyContent: "flex-end" }}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 24}
           >
-            <TouchableOpacity
-              activeOpacity={1}
+            <View
               className="bg-[#111111] border-t border-[#00FFB2]/25 rounded-t-[30px] p-6"
               style={{
                 width: "100%",
+                maxHeight: "80%",
                 shadowColor: "#00FFB2",
                 shadowOffset: { width: 0, height: -8 },
                 shadowOpacity: 0.2,
                 shadowRadius: 16,
                 elevation: 24,
-                paddingBottom: Math.max(insets.bottom + 20, 40),
               }}
             >
-              {/* Drag Handle Indicator */}
-              <View
-                className="w-12 h-1 bg-white/20 rounded-full mb-4"
-                style={{ alignSelf: "center" }}
-              />
-
-              {/* Modal Header */}
-              <View className="flex-row justify-between items-center mb-6">
-                <Text className="text-white text-base font-jakarta-bold tracking-wide">
-                  P2P TRANSFER INCEPTION
-                </Text>
-                <TouchableOpacity onPress={() => setIsModalOpen(false)}>
-                  <Text className="text-[#718096] text-xs font-jakarta-bold">
-                    CLOSE
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Mode selection toggles */}
-              <View className="flex-row bg-[#0A0A0A] p-1 rounded-xl mb-6 border border-white/5">
-                <TouchableOpacity
-                  className={`flex-1 py-2.5 rounded-lg items-center ${transferMode === "remote" ? "bg-[#00FFB2]" : ""}`}
-                  onPress={() => setTransferMode("remote")}
-                >
-                  <Text
-                    className={`text-[10px] font-jakarta-bold tracking-wider ${transferMode === "remote" ? "text-[#0A0A0A]" : "text-[#718096]"}`}
-                  >
-                    REMOTE SHIPPING
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className={`flex-1 py-2.5 rounded-lg items-center ${transferMode === "direct" ? "bg-[#00FFB2]" : ""}`}
-                  onPress={() => setTransferMode("direct")}
-                >
-                  <Text
-                    className={`text-[10px] font-jakarta-bold tracking-wider ${transferMode === "direct" ? "text-[#0A0A0A]" : "text-[#718096]"}`}
-                  >
-                    DIRECT HANDOVER
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Buyer Email Input */}
-              <View className="mb-5">
-                <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-2">
-                  BUYER EMAIL ADDRESS
-                </Text>
-                <TextInput
-                  className="bg-[#0A0A0A] text-white text-sm px-4 h-12 rounded-xl border border-white/5 font-jakarta"
-                  placeholder="e.g. buyer@example.com"
-                  placeholderTextColor="#4a5568"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoCorrect={false}
-                  value={buyerEmail}
-                  onChangeText={setBuyerEmail}
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{
+                  paddingBottom: Math.max(insets.bottom + 20, 40),
+                }}
+              >
+                {/* Drag Handle Indicator */}
+                <View
+                  className="w-12 h-1 bg-white/20 rounded-full mb-4"
+                  style={{ alignSelf: "center" }}
                 />
-                <Text className="text-[#718096] text-[10px] font-jakarta mt-2">
-                  The buyer must have a registered Luxtrace account.
-                </Text>
-              </View>
 
-              {/* Price input (Only for Remote Shipping) */}
-              {transferMode === "remote" && (
-                <View className="mb-6">
+                {/* Modal Header */}
+                <View className="flex-row justify-between items-center mb-6">
+                  <Text className="text-white text-base font-jakarta-bold tracking-wide">
+                    P2P TRANSFER INCEPTION
+                  </Text>
+                  <TouchableOpacity onPress={() => setIsModalOpen(false)}>
+                    <Text className="text-[#718096] text-xs font-jakarta-bold">
+                      CLOSE
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Mode selection toggles */}
+                <View className="flex-row bg-[#0A0A0A] p-1 rounded-xl mb-6 border border-white/5">
+                  <TouchableOpacity
+                    className={`flex-1 py-2.5 rounded-lg items-center ${transferMode === "remote" ? "bg-[#00FFB2]" : ""}`}
+                    onPress={() => setTransferMode("remote")}
+                  >
+                    <Text
+                      className={`text-[10px] font-jakarta-bold tracking-wider ${transferMode === "remote" ? "text-[#0A0A0A]" : "text-[#718096]"}`}
+                    >
+                      REMOTE SHIPPING
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className={`flex-1 py-2.5 rounded-lg items-center ${transferMode === "direct" ? "bg-[#00FFB2]" : ""}`}
+                    onPress={() => setTransferMode("direct")}
+                  >
+                    <Text
+                      className={`text-[10px] font-jakarta-bold tracking-wider ${transferMode === "direct" ? "text-[#0A0A0A]" : "text-[#718096]"}`}
+                    >
+                      DIRECT HANDOVER
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Buyer Email Input */}
+                <View className="mb-5">
                   <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-2">
-                    AGREED PRICE (IDR)
+                    BUYER EMAIL ADDRESS
                   </Text>
                   <TextInput
                     className="bg-[#0A0A0A] text-white text-sm px-4 h-12 rounded-xl border border-white/5 font-jakarta"
-                    placeholder="e.g. 50000000"
+                    placeholder="e.g. buyer@example.com"
                     placeholderTextColor="#4a5568"
-                    keyboardType="numeric"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
                     autoCorrect={false}
-                    value={agreedPrice}
-                    onChangeText={setAgreedPrice}
+                    value={buyerEmail}
+                    onChangeText={setBuyerEmail}
                   />
                   <Text className="text-[#718096] text-[10px] font-jakarta mt-2">
-                    Agreed payment price to be locked in Midtrans escrow.
+                    The buyer must have a registered Luxtrace account.
                   </Text>
                 </View>
-              )}
 
-              {/* Submit Button */}
-              <TouchableOpacity
-                className="bg-[#00FFB2] h-12 rounded-xl items-center justify-center shadow-md shadow-[#00FFB2]/20 flex-row"
-                onPress={handleCreateListing}
-                disabled={isSubmitting}
-                activeOpacity={0.8}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#0A0A0A" size="small" />
-                ) : (
-                  <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px]">
-                    INITIATE P2P TRANSACTION
-                  </Text>
+                {/* Price input (Only for Remote Shipping) */}
+                {transferMode === "remote" && (
+                  <View className="mb-6">
+                    <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-2">
+                      AGREED PRICE (IDR)
+                    </Text>
+                    <TextInput
+                      className="bg-[#0A0A0A] text-white text-sm px-4 h-12 rounded-xl border border-white/5 font-jakarta"
+                      placeholder="e.g. 50000000"
+                      placeholderTextColor="#4a5568"
+                      keyboardType="numeric"
+                      autoCorrect={false}
+                      value={agreedPrice}
+                      onChangeText={setAgreedPrice}
+                    />
+                    <Text className="text-[#718096] text-[10px] font-jakarta mt-2">
+                      Agreed payment price to be locked in Midtrans escrow.
+                    </Text>
+                  </View>
                 )}
-              </TouchableOpacity>
-            </TouchableOpacity>
+
+                {/* Submit Button */}
+                <TouchableOpacity
+                  className="bg-[#00FFB2] h-12 rounded-xl items-center justify-center shadow-md shadow-[#00FFB2]/20 flex-row"
+                  onPress={handleCreateListing}
+                  disabled={isSubmitting}
+                  activeOpacity={0.8}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color="#0A0A0A" size="small" />
+                  ) : (
+                    <Text className="text-[#0A0A0A] text-xs font-jakarta-bold tracking-[1.5px]">
+                      INITIATE P2P TRANSACTION
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
