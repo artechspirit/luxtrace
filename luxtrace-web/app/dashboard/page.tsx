@@ -403,7 +403,7 @@ export default function Dashboard() {
               if (provRes.ok && provData.success) {
                 timeline = provData.data.timeline || [];
               }
-            } catch (e) {}
+            } catch (e) { }
             return {
               product_id: p.product_id,
               serial_number: p.serial_number,
@@ -512,7 +512,7 @@ export default function Dashboard() {
               if (provRes.ok && provData.success) {
                 timeline = provData.data.timeline || [];
               }
-            } catch (e) {}
+            } catch (e) { }
             return {
               product_id: p.product_id,
               serial_number: p.serial_number,
@@ -814,7 +814,7 @@ export default function Dashboard() {
         if (!response.ok || !result.success) {
           throw new Error(
             result.error?.message ||
-              "Failed to trigger real payment settlement",
+            "Failed to trigger real payment settlement",
           );
         }
         await withMinimumDelay(Promise.resolve(), 12500);
@@ -1142,18 +1142,16 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-[#0A0A0A] font-sans antialiased text-[#ededed]">
       <div
-        className={`fixed inset-0 bg-black/70 z-30 transition-opacity duration-300 lg:hidden ${
-          isSidebarOpen
-            ? "opacity-100 pointer-events-auto"
-            : "opacity-0 pointer-events-none"
-        }`}
+        className={`fixed inset-0 bg-black/70 z-30 transition-opacity duration-300 lg:hidden ${isSidebarOpen
+          ? "opacity-100 pointer-events-auto"
+          : "opacity-0 pointer-events-none"
+          }`}
         onClick={() => setIsSidebarOpen(false)}
       />
       {/* ─── SIDEBAR ───────────────────────────────────────────────────────────── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-72 max-w-full h-screen border-r border-[#00FFB2]/8 bg-black/90 backdrop-blur-md flex flex-col justify-between p-6 overflow-y-auto transition-transform duration-300 ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0 lg:w-64 lg:bg-black/40 lg:backdrop-blur-md`}
+        className={`fixed inset-y-0 left-0 z-40 w-72 max-w-full h-screen border-r border-[#00FFB2]/8 bg-black/90 backdrop-blur-md flex flex-col justify-between p-6 overflow-y-auto transition-transform duration-300 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          } lg:translate-x-0 lg:w-64 lg:bg-black/40 lg:backdrop-blur-md`}
       >
         <div>
           {/* Logo */}
@@ -1177,11 +1175,10 @@ export default function Dashboard() {
           <nav className="space-y-1">
             <button
               onClick={() => switchTab("dashboard")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${
-                activeTab === "dashboard"
-                  ? "bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]"
-                  : "text-zinc-400 hover:text-white hover:bg-white/3"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${activeTab === "dashboard"
+                ? "bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]"
+                : "text-zinc-400 hover:text-white hover:bg-white/3"
+                }`}
             >
               <svg
                 className="w-4 h-4"
@@ -1201,11 +1198,10 @@ export default function Dashboard() {
 
             <button
               onClick={() => switchTab("products")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${
-                activeTab === "products"
-                  ? "bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]"
-                  : "text-zinc-400 hover:text-white hover:bg-white/3"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${activeTab === "products"
+                ? "bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]"
+                : "text-zinc-400 hover:text-white hover:bg-white/3"
+                }`}
             >
               <svg
                 className="w-4 h-4"
@@ -1225,11 +1221,10 @@ export default function Dashboard() {
 
             <button
               onClick={() => switchTab("transactions")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${
-                activeTab === "transactions"
-                  ? "bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]"
-                  : "text-zinc-400 hover:text-white hover:bg-white/3"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${activeTab === "transactions"
+                ? "bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]"
+                : "text-zinc-400 hover:text-white hover:bg-white/3"
+                }`}
             >
               <svg
                 className="w-4 h-4"
@@ -1249,11 +1244,10 @@ export default function Dashboard() {
 
             <button
               onClick={() => switchTab("boutique")}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${
-                activeTab === "boutique"
-                  ? "bg-gradient-to-r from-[#1a0e00] to-[#120a00] border border-[#C9A84C]/30 text-[#C9A84C] shadow-[0_0_15px_rgba(201,168,76,0.08)]"
-                  : "text-zinc-400 hover:text-white hover:bg-white/3"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer ${activeTab === "boutique"
+                ? "bg-gradient-to-r from-[#1a0e00] to-[#120a00] border border-[#C9A84C]/30 text-[#C9A84C] shadow-[0_0_15px_rgba(201,168,76,0.08)]"
+                : "text-zinc-400 hover:text-white hover:bg-white/3"
+                }`}
             >
               <svg
                 className="w-4 h-4"
@@ -1269,6 +1263,29 @@ export default function Dashboard() {
                 />
               </svg>
               <span>Boutique Sell</span>
+            </button>
+
+            <button
+              onClick={() => switchTab("docs")}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-300 font-dm uppercase tracking-wider cursor-pointer mt-4 ${activeTab === "docs"
+                ? "bg-gradient-to-r from-[#0F2A25] to-[#081C18] border border-[#00FFB2]/20 text-[#00FFB2] shadow-[0_0_15px_rgba(0,255,178,0.05)]"
+                : "text-zinc-400 hover:text-white hover:bg-white/3"
+                }`}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                />
+              </svg>
+              <span>Documentation</span>
             </button>
           </nav>
         </div>
@@ -1355,58 +1372,60 @@ export default function Dashboard() {
           </button>
         </div>
         {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row justify-between items-start md:items-center border-b border-white/5 pb-6">
-          <div>
-            <h1 className="text-2xl font-bold font-dm uppercase tracking-wider text-white">
-              {activeTab === "dashboard" && "System Operations"}
-              {activeTab === "products" && "Asset Registry"}
-              {activeTab === "transactions" && "P2P Escrow Manager"}
-              {activeTab === "boutique" && "Boutique Sale Terminal"}
-            </h1>
-            <p className="text-sm text-zinc-400 mt-1">
-              {activeTab === "dashboard" &&
-                "Real-time status of physical NFC-bound luxury assets on Sepolia Ethereum"}
-              {activeTab === "products" &&
-                "Trace, audit, and inspect digital twins registered in the smart contract"}
-              {activeTab === "transactions" &&
-                "Inspect Midtrans invoices and release funds upon hardware proximity scan"}
-              {activeTab === "boutique" &&
-                "Select a product and buyer — generate QR payment link for in-store scanning"}
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-            <div className="relative w-full md:w-64">
-              <input
-                type="text"
-                placeholder="Search Serial / Name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-black/40 border border-[#00FFB2]/10 rounded-lg px-4 py-2 text-xs focus:outline-none focus:border-[#00FFB2] transition duration-300 font-sans"
-              />
-              <svg
-                className="w-4 h-4 absolute right-3 top-2.5 text-zinc-500"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
+        {activeTab !== "docs" && (
+          <div className="flex flex-col gap-4 md:flex-row justify-between items-start md:items-center border-b border-white/5 pb-6">
+            <div>
+              <h1 className="text-2xl font-bold font-dm uppercase tracking-wider text-white">
+                {activeTab === "dashboard" && "System Operations"}
+                {activeTab === "products" && "Asset Registry"}
+                {activeTab === "transactions" && "P2P Escrow Manager"}
+                {activeTab === "boutique" && "Boutique Sale Terminal"}
+              </h1>
+              <p className="text-sm text-zinc-400 mt-1">
+                {activeTab === "dashboard" &&
+                  "Real-time status of physical NFC-bound luxury assets on Sepolia Ethereum"}
+                {activeTab === "products" &&
+                  "Trace, audit, and inspect digital twins registered in the smart contract"}
+                {activeTab === "transactions" &&
+                  "Inspect Midtrans invoices and release funds upon hardware proximity scan"}
+                {activeTab === "boutique" &&
+                  "Select a product and buyer — generate QR payment link for in-store scanning"}
+              </p>
             </div>
 
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="glow-btn px-5 py-2 rounded-lg text-xs font-dm uppercase tracking-wider font-semibold cursor-pointer"
-            >
-              Mint New Twin
-            </button>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="relative w-full md:w-64">
+                <input
+                  type="text"
+                  placeholder="Search Serial / Name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-black/40 border border-[#00FFB2]/10 rounded-lg px-4 py-2 text-xs focus:outline-none focus:border-[#00FFB2] transition duration-300 font-sans"
+                />
+                <svg
+                  className="w-4 h-4 absolute right-3 top-2.5 text-zinc-500"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="glow-btn px-5 py-2 rounded-lg text-xs font-dm uppercase tracking-wider font-semibold cursor-pointer"
+              >
+                Mint New Twin
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ─── TAB CONTENT: DASHBOARD ───────────────────────────────────────────── */}
         {activeTab === "dashboard" && (
@@ -1771,15 +1790,14 @@ export default function Dashboard() {
                             </td>
                             <td className="py-4 px-2 text-center">
                               <span
-                                className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${
-                                  tx.status === "COMPLETED"
-                                    ? "bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]"
-                                    : tx.status === "IN_TRANSIT"
-                                      ? "bg-amber-400/5 border-amber-400/15 text-amber-400"
-                                      : tx.status === "PAID"
-                                        ? "bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]"
-                                        : "bg-zinc-400/5 border-zinc-400/15 text-zinc-400"
-                                }`}
+                                className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${tx.status === "COMPLETED"
+                                  ? "bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]"
+                                  : tx.status === "IN_TRANSIT"
+                                    ? "bg-amber-400/5 border-amber-400/15 text-amber-400"
+                                    : tx.status === "PAID"
+                                      ? "bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]"
+                                      : "bg-zinc-400/5 border-zinc-400/15 text-zinc-400"
+                                  }`}
                               >
                                 {tx.status}
                               </span>
@@ -1921,11 +1939,10 @@ export default function Dashboard() {
                             return (
                               <div key={index} className="relative">
                                 <span
-                                  className={`absolute -left-[30px] top-1.5 w-3.5 h-3.5 rounded-full border border-black flex items-center justify-center ${
-                                    isLast
-                                      ? "bg-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.5)]"
-                                      : "bg-zinc-800"
-                                  }`}
+                                  className={`absolute -left-[30px] top-1.5 w-3.5 h-3.5 rounded-full border border-black flex items-center justify-center ${isLast
+                                    ? "bg-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.5)]"
+                                    : "bg-zinc-800"
+                                    }`}
                                 >
                                   {isLast && (
                                     <span className="w-1.5 h-1.5 rounded-full bg-black"></span>
@@ -1935,9 +1952,8 @@ export default function Dashboard() {
                                 <div>
                                   <div className="flex justify-between items-baseline mb-1">
                                     <span
-                                      className={`text-[10px] font-mono tracking-widest uppercase font-semibold ${
-                                        isLast ? "text-[#00FFB2]" : "text-white"
-                                      }`}
+                                      className={`text-[10px] font-mono tracking-widest uppercase font-semibold ${isLast ? "text-[#00FFB2]" : "text-white"
+                                        }`}
                                     >
                                       {log.event}
                                     </span>
@@ -2051,11 +2067,10 @@ export default function Dashboard() {
                     <button
                       key={filter}
                       onClick={() => setProductStatusFilter(filter)}
-                      className={`px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider cursor-pointer transition ${
-                        productStatusFilter === filter
-                          ? "bg-[#00FFB2]/10 text-[#00FFB2] border-r border-white/5"
-                          : "text-zinc-500 hover:text-zinc-300"
-                      }`}
+                      className={`px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider cursor-pointer transition ${productStatusFilter === filter
+                        ? "bg-[#00FFB2]/10 text-[#00FFB2] border-r border-white/5"
+                        : "text-zinc-500 hover:text-zinc-300"
+                        }`}
                     >
                       {filter.replace("_", " ")}
                     </button>
@@ -2083,12 +2098,11 @@ export default function Dashboard() {
                         <tr
                           key={p.product_id}
                           onClick={() => setSelectedProduct(p)}
-                          className={`hover:bg-white/2 cursor-pointer transition duration-150 ${
-                            selectedProduct &&
+                          className={`hover:bg-white/2 cursor-pointer transition duration-150 ${selectedProduct &&
                             selectedProduct.product_id === p.product_id
-                              ? "bg-white/2 border-l border-[#00FFB2]"
-                              : ""
-                          }`}
+                            ? "bg-white/2 border-l border-[#00FFB2]"
+                            : ""
+                            }`}
                         >
                           <td className="py-4 px-2 text-white font-medium">
                             <span className="block font-dm text-sm leading-none mb-1">
@@ -2106,15 +2120,14 @@ export default function Dashboard() {
                           </td>
                           <td className="py-4 px-2 text-center">
                             <span
-                              className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${
-                                p.status === "OWNED"
-                                  ? "bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]"
-                                  : p.status === "IN_TRANSIT"
-                                    ? "bg-amber-400/5 border-amber-400/15 text-amber-400"
-                                    : p.status === "REGISTERED"
-                                      ? "bg-blue-400/5 border-blue-400/15 text-blue-400"
-                                      : "bg-zinc-400/5 border-zinc-400/15 text-zinc-400"
-                              }`}
+                              className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${p.status === "OWNED"
+                                ? "bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]"
+                                : p.status === "IN_TRANSIT"
+                                  ? "bg-amber-400/5 border-amber-400/15 text-amber-400"
+                                  : p.status === "REGISTERED"
+                                    ? "bg-blue-400/5 border-blue-400/15 text-blue-400"
+                                    : "bg-zinc-400/5 border-zinc-400/15 text-zinc-400"
+                                }`}
                             >
                               {p.status}
                             </span>
@@ -2271,11 +2284,10 @@ export default function Dashboard() {
                             return (
                               <div key={index} className="relative">
                                 <span
-                                  className={`absolute -left-[30px] top-1.5 w-3.5 h-3.5 rounded-full border border-black flex items-center justify-center ${
-                                    isLast
-                                      ? "bg-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.5)]"
-                                      : "bg-zinc-800"
-                                  }`}
+                                  className={`absolute -left-[30px] top-1.5 w-3.5 h-3.5 rounded-full border border-black flex items-center justify-center ${isLast
+                                    ? "bg-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.5)]"
+                                    : "bg-zinc-800"
+                                    }`}
                                 >
                                   {isLast && (
                                     <span className="w-1.5 h-1.5 rounded-full bg-black"></span>
@@ -2285,9 +2297,8 @@ export default function Dashboard() {
                                 <div>
                                   <div className="flex justify-between items-baseline mb-1">
                                     <span
-                                      className={`text-[10px] font-mono tracking-widest uppercase font-semibold ${
-                                        isLast ? "text-[#00FFB2]" : "text-white"
-                                      }`}
+                                      className={`text-[10px] font-mono tracking-widest uppercase font-semibold ${isLast ? "text-[#00FFB2]" : "text-white"
+                                        }`}
                                     >
                                       {log.event}
                                     </span>
@@ -2434,15 +2445,14 @@ export default function Dashboard() {
                           </td>
                           <td className="py-4 px-2 text-center">
                             <span
-                              className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${
-                                tx.status === "COMPLETED"
-                                  ? "bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]"
-                                  : tx.status === "IN_TRANSIT"
-                                    ? "bg-amber-400/5 border-amber-400/15 text-amber-400"
-                                    : tx.status === "PAID"
-                                      ? "bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]"
-                                      : "bg-zinc-400/5 border-zinc-400/15 text-zinc-400"
-                              }`}
+                              className={`inline-block px-2.5 py-1 rounded text-[9px] font-mono tracking-widest uppercase border ${tx.status === "COMPLETED"
+                                ? "bg-[#00FFB2]/5 border-[#00FFB2]/15 text-[#00FFB2] shadow-[0_0_10px_rgba(0,255,178,0.05)]"
+                                : tx.status === "IN_TRANSIT"
+                                  ? "bg-amber-400/5 border-amber-400/15 text-amber-400"
+                                  : tx.status === "PAID"
+                                    ? "bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]"
+                                    : "bg-zinc-400/5 border-zinc-400/15 text-zinc-400"
+                                }`}
                             >
                               {tx.status}
                             </span>
@@ -2458,8 +2468,8 @@ export default function Dashboard() {
 
                               {tx.status === "PENDING" &&
                                 (tx.type === "P2P_DIRECT_HANDOVER" ||
-                                (tx.type === "PRIMARY_BOUTIQUE" &&
-                                  !tx.payment_ref) ? (
+                                  (tx.type === "PRIMARY_BOUTIQUE" &&
+                                    !tx.payment_ref) ? (
                                   <button
                                     onClick={() => handleNfcVerification(tx.id)}
                                     className="px-3 py-1.5 bg-amber-400/5 hover:bg-amber-400/10 border border-amber-400/20 hover:border-amber-400/40 rounded text-[9px] font-mono text-amber-400 transition uppercase tracking-wider cursor-pointer"
@@ -2643,18 +2653,18 @@ export default function Dashboard() {
                       Loading boutique inventory...
                     </div>
                   ) : boutiqueProducts.filter(
-                      (p) =>
-                        !boutiqueSearch ||
-                        p.brand
-                          ?.toLowerCase()
-                          .includes(boutiqueSearch.toLowerCase()) ||
-                        p.name
-                          ?.toLowerCase()
-                          .includes(boutiqueSearch.toLowerCase()) ||
-                        p.serial_number
-                          ?.toLowerCase()
-                          .includes(boutiqueSearch.toLowerCase()),
-                    ).length === 0 ? (
+                    (p) =>
+                      !boutiqueSearch ||
+                      p.brand
+                        ?.toLowerCase()
+                        .includes(boutiqueSearch.toLowerCase()) ||
+                      p.name
+                        ?.toLowerCase()
+                        .includes(boutiqueSearch.toLowerCase()) ||
+                      p.serial_number
+                        ?.toLowerCase()
+                        .includes(boutiqueSearch.toLowerCase()),
+                  ).length === 0 ? (
                     <div className="py-8 text-center">
                       <p className="text-zinc-500 text-xs font-mono">
                         No REGISTERED products available.
@@ -2731,11 +2741,10 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setBoutiqueSaleMode("escrow")}
-                  className={`border rounded-xl p-4 text-left transition duration-300 cursor-pointer flex flex-col justify-between h-28 ${
-                    boutiqueSaleMode === "escrow"
-                      ? "border-[#C9A84C] bg-[#C9A84C]/5 text-white"
-                      : "border-white/5 bg-black/40 hover:border-white/10 text-zinc-400 hover:text-zinc-300"
-                  }`}
+                  className={`border rounded-xl p-4 text-left transition duration-300 cursor-pointer flex flex-col justify-between h-28 ${boutiqueSaleMode === "escrow"
+                    ? "border-[#C9A84C] bg-[#C9A84C]/5 text-white"
+                    : "border-white/5 bg-black/40 hover:border-white/10 text-zinc-400 hover:text-zinc-300"
+                    }`}
                 >
                   <div>
                     <span className="text-xs font-bold font-dm uppercase tracking-wider block">
@@ -2751,11 +2760,10 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setBoutiqueSaleMode("direct")}
-                  className={`border rounded-xl p-4 text-left transition duration-300 cursor-pointer flex flex-col justify-between h-28 ${
-                    boutiqueSaleMode === "direct"
-                      ? "border-[#C9A84C] bg-[#C9A84C]/5 text-white"
-                      : "border-white/5 bg-black/40 hover:border-white/10 text-zinc-400 hover:text-zinc-300"
-                  }`}
+                  className={`border rounded-xl p-4 text-left transition duration-300 cursor-pointer flex flex-col justify-between h-28 ${boutiqueSaleMode === "direct"
+                    ? "border-[#C9A84C] bg-[#C9A84C]/5 text-white"
+                    : "border-white/5 bg-black/40 hover:border-white/10 text-zinc-400 hover:text-zinc-300"
+                    }`}
                 >
                   <div>
                     <span className="text-xs font-bold font-dm uppercase tracking-wider block">
@@ -2803,13 +2811,12 @@ export default function Dashboard() {
                 !boutiqueBuyerEmail ||
                 isBoutiqueSubmitting
               }
-              className={`w-full h-12 rounded-xl text-sm font-dm font-bold uppercase tracking-wider transition duration-200 cursor-pointer ${
-                !selectedBoutiqueProduct ||
+              className={`w-full h-12 rounded-xl text-sm font-dm font-bold uppercase tracking-wider transition duration-200 cursor-pointer ${!selectedBoutiqueProduct ||
                 !boutiqueBuyerEmail ||
                 isBoutiqueSubmitting
-                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-40"
-                  : "bg-[#C9A84C] hover:bg-[#d4b055] text-[#0A0A0A] shadow-[0_0_20px_rgba(201,168,76,0.3)] hover:shadow-[0_0_30px_rgba(201,168,76,0.5)]"
-              }`}
+                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed opacity-40"
+                : "bg-[#C9A84C] hover:bg-[#d4b055] text-[#0A0A0A] shadow-[0_0_20px_rgba(201,168,76,0.3)] hover:shadow-[0_0_30px_rgba(201,168,76,0.5)]"
+                }`}
             >
               {isBoutiqueSubmitting ? (
                 <span className="flex items-center justify-center gap-2">
@@ -2899,14 +2906,13 @@ export default function Dashboard() {
                     Transaction Status
                   </span>
                   <span
-                    className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-mono tracking-wider uppercase border ${
-                      selectedTxDetail.status === "COMPLETED"
-                        ? "bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]"
-                        : selectedTxDetail.status === "PAID" ||
-                            selectedTxDetail.status === "IN_TRANSIT"
-                          ? "bg-amber-400/5 border-amber-400/20 text-amber-400"
-                          : "bg-zinc-400/5 border-zinc-400/15 text-zinc-400"
-                    }`}
+                    className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-mono tracking-wider uppercase border ${selectedTxDetail.status === "COMPLETED"
+                      ? "bg-[#00FFB2]/5 border-[#00FFB2]/20 text-[#00FFB2]"
+                      : selectedTxDetail.status === "PAID" ||
+                        selectedTxDetail.status === "IN_TRANSIT"
+                        ? "bg-amber-400/5 border-amber-400/20 text-amber-400"
+                        : "bg-zinc-400/5 border-zinc-400/15 text-zinc-400"
+                      }`}
                   >
                     {selectedTxDetail.status}
                   </span>
@@ -2940,7 +2946,7 @@ export default function Dashboard() {
               {/* Handover or Payment QR Code display */}
               {txQrDataUrl ? (
                 selectedTxDetail.type === "P2P_REMOTE_SHIPPING" &&
-                selectedTxDetail.status === "PENDING" ? (
+                  selectedTxDetail.status === "PENDING" ? (
                   <div className="border border-[#C9A84C]/25 bg-gradient-to-b from-[#14120D] to-[#0D0D0D] rounded-2xl p-6 flex flex-col items-center justify-center text-center">
                     <div className="w-10 h-10 rounded-full bg-[#C9A84C]/10 border border-[#C9A84C]/20 flex items-center justify-center mb-3">
                       <svg
@@ -3051,7 +3057,7 @@ export default function Dashboard() {
                   </h4>
                   <p className="text-[10px] text-zinc-500 max-w-xs mx-auto leading-relaxed">
                     {selectedTxDetail.status === "PENDING" &&
-                    selectedTxDetail.type === "P2P_REMOTE_SHIPPING"
+                      selectedTxDetail.type === "P2P_REMOTE_SHIPPING"
                       ? "Awaiting deposit from the buyer. Handover QR becomes available once escrow is paid."
                       : "This transaction is not in a state that requires a physical handover QR verification."}
                   </p>
@@ -3311,6 +3317,183 @@ export default function Dashboard() {
             >
               Initiate Another Sale
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── DOCUMENTATION VIEW ──────────────────────────────────────────────── */}
+      {activeTab === "docs" && (
+        <div className="flex w-full justify-center pb-12">
+          <div className="ml-[-95px] max-w-[95%] py-16 space-y-8">
+
+            {/* Header Banner */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0F2A25] to-black border border-[#00FFB2]/20 p-8 md:p-12">
+              <div className="absolute right-0 top-0 w-64 h-64 bg-[#00FFB2]/5 rounded-full blur-3xl"></div>
+              <div className="relative z-10">
+                <span className="text-[#00FFB2] text-[10px] font-mono uppercase tracking-[0.2em] mb-2 block">
+                  Official Guide
+                </span>
+                <h2 className="text-3xl font-bold font-dm text-white tracking-wide uppercase mb-4">
+                  Luxtrace System Documentation
+                </h2>
+                <p className="text-zinc-400 text-sm font-mono max-w-2xl leading-relaxed">
+                  A comprehensive guide to utilizing the Luxtrace ecosystem. Learn how to manage digital twins, operate the boutique terminal, and utilize the mobile app for NFC proximity authentication and P2P transfers.
+                </p>
+              </div>
+            </div>
+
+            {/* Grid Layout for Main Sections */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Operator Credentials & Downloads */}
+              <div className="luxury-card rounded-2xl p-6 md:p-8 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-base font-dm font-bold tracking-widest text-[#00FFB2] uppercase mb-4 border-b border-white/5 pb-3">
+                    Operator Credentials
+                  </h3>
+                  <p className="text-zinc-400 text-xs font-mono leading-relaxed mb-6">
+                    Use these credentials to access the administrative dashboard, mint new digital twins, and operate the Boutique Sale Terminal.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center bg-black/40 border border-white/5 rounded-xl p-4">
+                      <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Email</span>
+                      <span className="text-sm text-white font-mono">operator@luxtrace.com</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-black/40 border border-white/5 rounded-xl p-4">
+                      <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Password</span>
+                      <span className="text-sm text-white font-mono">password123</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile App Section */}
+              <div className="luxury-card rounded-2xl p-6 md:p-8 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-base font-dm font-bold tracking-widest text-[#00FFB2] uppercase mb-4 border-b border-white/5 pb-3">
+                    Mobile Application
+                  </h3>
+                  <p className="text-zinc-400 text-xs font-mono leading-relaxed mb-6">
+                    The consumer-facing Android app is required for cryptographic NFC verification, claiming ownership, and initiating peer-to-peer (P2P) transfers.
+                  </p>
+
+                  <div className="bg-[#00FFB2]/5 border border-[#00FFB2]/10 rounded-xl p-4 mb-6">
+                    <h4 className="text-[#00FFB2] text-xs font-dm font-bold uppercase tracking-wider mb-2">Key Features</h4>
+                    <ul className="text-zinc-400 text-[10px] font-mono space-y-2 list-disc list-inside">
+                      <li>One-tap NFC product authentication</li>
+                      <li>Digital Twin Ownership Wallet</li>
+                      <li>Secure P2P Direct Handover via QR</li>
+                      <li>P2P Remote Shipping Escrow via Midtrans</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <a
+                  href="/downloads/luxtrace-app.apk"
+                  className="w-full inline-flex items-center justify-center gap-2 bg-[#00FFB2] text-black font-dm font-bold uppercase tracking-widest text-xs py-4 px-6 rounded-xl hover:bg-[#00cc8e] transition-colors shadow-lg shadow-[#00FFB2]/20"
+                  download
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download Android APK
+                </a>
+              </div>
+
+            </div>
+
+            {/* Dashboard Guide */}
+            <div className="luxury-card rounded-2xl p-6 md:p-8">
+              <h3 className="text-base font-dm font-bold tracking-widest text-white uppercase mb-6 border-b border-white/5 pb-3">
+                Web Dashboard Modules
+              </h3>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <div className="bg-black/40 border border-white/5 rounded-xl p-5 hover:border-[#00FFB2]/30 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mb-4">
+                    <span className="text-[#00FFB2] text-xs font-bold">1</span>
+                  </div>
+                  <h4 className="text-sm font-bold font-dm text-white uppercase tracking-wider mb-2">Asset Registry</h4>
+                  <p className="text-[10px] text-zinc-400 font-mono leading-relaxed mb-3">
+                    View and manage all registered physical assets. Each asset is tied to a specific NFC chip UID and backed by an ERC-721 NFT on the Sepolia testnet.
+                  </p>
+                  <p className="text-[10px] text-zinc-500 font-mono italic">
+                    * Click on any asset to view its complete, immutable provenance timeline.
+                  </p>
+                </div>
+
+                <div className="bg-black/40 border border-white/5 rounded-xl p-5 hover:border-[#00FFB2]/30 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mb-4">
+                    <span className="text-[#00FFB2] text-xs font-bold">2</span>
+                  </div>
+                  <h4 className="text-sm font-bold font-dm text-white uppercase tracking-wider mb-2">Boutique Terminal</h4>
+                  <p className="text-[10px] text-zinc-400 font-mono leading-relaxed mb-3">
+                    The Point-of-Sale module for operators. Initiate primary sales directly to consumers. Select a product, input the buyer's email, and generate a QR code.
+                  </p>
+                  <p className="text-[10px] text-zinc-500 font-mono italic">
+                    * Supports Direct Handover (buyer scans via app) and Escrow (buyer pays via Midtrans).
+                  </p>
+                </div>
+
+                <div className="bg-black/40 border border-white/5 rounded-xl p-5 hover:border-[#00FFB2]/30 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center mb-4">
+                    <span className="text-[#00FFB2] text-xs font-bold">3</span>
+                  </div>
+                  <h4 className="text-sm font-bold font-dm text-white uppercase tracking-wider mb-2">P2P Escrows</h4>
+                  <p className="text-[10px] text-zinc-400 font-mono leading-relaxed mb-3">
+                    Monitor active peer-to-peer secondary market transactions. Operators have an overview of locked funds and pending physical NFC handovers.
+                  </p>
+                  <p className="text-[10px] text-zinc-500 font-mono italic">
+                    * Funds are automatically released via IRIS API once the buyer taps the NFC chip.
+                  </p>
+                </div>
+
+              </div>
+            </div>
+
+            {/* System Workflows */}
+            <div className="luxury-card rounded-2xl p-6 md:p-8">
+              <h3 className="text-base font-dm font-bold tracking-widest text-white uppercase mb-6 border-b border-white/5 pb-3">
+                Core System Workflows
+              </h3>
+
+              <div className="space-y-4">
+                <div className="border border-white/5 bg-black/40 rounded-xl p-6">
+                  <h4 className="text-[#C9A84C] text-sm font-dm font-bold uppercase tracking-wider mb-2">Primary Sale (Boutique to Consumer)</h4>
+                  <ol className="list-decimal list-inside text-xs text-zinc-400 font-mono space-y-2">
+                    <li>Operator logs into Dashboard and navigates to <span className="text-white">Boutique Sell</span>.</li>
+                    <li>Operator selects an unsold asset and enters the registered consumer's email.</li>
+                    <li>Operator selects <strong>Direct P2P</strong> and a QR code is generated on the screen.</li>
+                    <li>Consumer opens the Luxtrace App, taps the QR Scanner, and scans the screen.</li>
+                    <li>Consumer taps their phone to the physical luxury bag/watch to finalize the blockchain transfer.</li>
+                  </ol>
+                </div>
+
+                <div className="border border-white/5 bg-black/40 rounded-xl p-6">
+                  <h4 className="text-[#00FFB2] text-sm font-dm font-bold uppercase tracking-wider mb-2">Secondary Sale (Direct P2P Handover)</h4>
+                  <ol className="list-decimal list-inside text-xs text-zinc-400 font-mono space-y-2">
+                    <li>Seller opens Luxtrace App, views their owned asset, and clicks <span className="text-white">Sell / Transfer</span>.</li>
+                    <li>Seller enters Buyer's email, selects <strong>Direct Handover</strong>. A QR code appears.</li>
+                    <li>Buyer opens their Luxtrace App, scans the Seller's QR code.</li>
+                    <li>Buyer taps the physical item with their phone.</li>
+                    <li>The smart contract verifies the cryptographic NFC signature and instantly transfers the NFT to the Buyer.</li>
+                  </ol>
+                </div>
+
+                <div className="border border-white/5 bg-black/40 rounded-xl p-6">
+                  <h4 className="text-[#00FFB2] text-sm font-dm font-bold uppercase tracking-wider mb-2">Secondary Sale (Remote P2P Escrow)</h4>
+                  <ol className="list-decimal list-inside text-xs text-zinc-400 font-mono space-y-2">
+                    <li>Seller opens App, selects <strong>Remote Shipping</strong>, enters Buyer email and agreed Price.</li>
+                    <li>Midtrans Escrow link is generated and sent to Buyer via Push Notification.</li>
+                    <li>Buyer pays the invoice. Funds are locked securely in Midtrans.</li>
+                    <li>Seller ships the physical item.</li>
+                    <li>Buyer receives the item, opens the app, and taps the NFC tag.</li>
+                    <li>System validates the tap, transfers the NFT, and triggers Midtrans IRIS to disburse funds to the Seller.</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
