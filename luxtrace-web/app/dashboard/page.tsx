@@ -1473,8 +1473,8 @@ export default function Dashboard() {
 
               <div className="luxury-card rounded-xl p-5 relative overflow-hidden group">
                 <div className="absolute right-0 top-0 w-24 h-24 bg-[#00FFB2]/2 rounded-full blur-2xl group-hover:bg-[#00FFB2]/5 transition-all duration-500"></div>
-                <span className="text-[10px] text-zinc-400 font-mono uppercase tracking-widest block mb-2">
-                  Escrow Locked Volume
+                <span className="text-[10px] text-[#00FFB2] font-mono uppercase tracking-widest block mb-2">
+                  MIDTRANS ESCROW BALANCE
                 </span>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-bold font-dm text-white">
@@ -1485,7 +1485,7 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <p className="text-[10px] text-zinc-500 mt-2 font-mono">
-                  Midtrans transaction hold state
+                  Funds currently held in Midtrans
                 </p>
               </div>
 

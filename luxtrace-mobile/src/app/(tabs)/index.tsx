@@ -261,6 +261,10 @@ export default function HomeScreen() {
     )
   }
 
+  const userActiveEscrowValue = transactions
+    .filter(t => t.status === 'PAID' || t.status === 'IN_TRANSIT')
+    .reduce((sum, t) => sum + Number(t.amount_idr || 0), 0)
+
   return (
     <View
       className="flex-1 bg-[#0A0A0A]"
@@ -273,6 +277,7 @@ export default function HomeScreen() {
         <View>
           <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[2px] mb-1">WELCOME BACK</Text>
           <Text className="text-white text-[20px] font-jakarta-bold tracking-[0.5px]">{user?.full_name?.toUpperCase() || 'USER'}</Text>
+          <Text className="text-[#718096] text-[12px] font-jakarta mb-1">{user?.email}</Text>
           <Text className="text-[#a0aec0] text-[11px] font-jakarta-semibold tracking-[0.5px] mt-1">ROLE: {user?.role}</Text>
         </View>
         <TouchableOpacity
@@ -302,6 +307,16 @@ export default function HomeScreen() {
           <Text className="text-[#00FFB2] text-[10px] font-jakarta-bold tracking-[0.5px] ml-3">VIEW</Text>
         </TouchableOpacity>
       )}
+
+      {/* User Escrow Balance Summary - Hidden for now per user request
+      <View className="flex-row items-center justify-between bg-[#00FFB2]/10 border border-[#00FFB2]/20 rounded-xl p-4 mx-6 mb-6">
+        <View>
+          <Text className="text-[#00FFB2] text-[9px] font-jakarta-bold tracking-[1.5px] mb-1">YOUR ACTIVE ESCROW</Text>
+          <Text className="text-white text-lg font-jakarta-bold">{formatCurrency(userActiveEscrowValue)}</Text>
+        </View>
+        <Ionicons name="shield-checkmark" size={24} color="#00FFB2" />
+      </View>
+      */}
 
       {/* Main List Section */}
       <View className="flex-1 px-6">

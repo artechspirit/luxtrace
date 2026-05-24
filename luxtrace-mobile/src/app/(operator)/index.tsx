@@ -72,6 +72,9 @@ export default function OperatorDashboard() {
           <Text className="text-white text-[20px] font-jakarta-bold tracking-[0.5px]">
             {user?.full_name?.toUpperCase() || 'OPERATOR'}
           </Text>
+          <Text className="text-[#718096] text-[12px] font-jakarta mb-1">
+            {user?.email}
+          </Text>
           <Text className="text-[#a0aec0] text-[11px] font-jakarta-semibold tracking-[0.5px] mt-1">
             ROLE: {user?.role}
           </Text>
