@@ -11,6 +11,7 @@ import {
   Clipboard,
   Linking,
 } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { API_BASE_URL } from "@/constants/config";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -485,11 +486,15 @@ export default function TransactionDetailScreen() {
               {transaction.payment_url ? (
                 <TouchableOpacity
                   style={[styles.payButton, { marginBottom: 12 }]}
-                  onPress={() => {
+                  onPress={async () => {
                     if (transaction.payment_url) {
-                      Linking.openURL(transaction.payment_url).catch((err) => {
+                      try {
+                        await WebBrowser.openBrowserAsync(transaction.payment_url);
+                        // Refresh transaction details after coming back
+                        fetchTransactionDetails();
+                      } catch (err) {
                         showAlert("Error", "Failed to open payment page.");
-                      });
+                      }
                     }
                   }}
                 >
