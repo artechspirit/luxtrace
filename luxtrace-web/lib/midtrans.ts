@@ -6,7 +6,8 @@ const clientKey = process.env.MIDTRANS_CLIENT_KEY || "placeholder-client-key";
 const midtransEnv = process.env.MIDTRANS_ENV?.toLowerCase();
 const isProduction =
   midtransEnv === "production" ||
-  (midtransEnv === undefined && process.env.NODE_ENV === "production");
+  (midtransEnv === undefined && process.env.NODE_ENV === "production") ||
+  serverKey.startsWith("Mid-server-");
 
 if (
   (!process.env.MIDTRANS_SERVER_KEY || !process.env.MIDTRANS_CLIENT_KEY) &&

@@ -33,8 +33,8 @@ export const transactionService = {
           const itemName = `${product.brand} — ${product.name}`;
           const snapResult = await createSnapInvoice({
             orderId,
-            amountIdr: tx.amount_idr,
-            customerName: buyer.full_name || buyer.email.split("@")[0],
+            amountIdr: Number(tx.amount_idr),
+            customerName: buyer.full_name ?? buyer.email.split("@")[0],
             customerEmail: buyer.email,
             itemId: tx.product_id,
             itemName,
