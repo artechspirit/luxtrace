@@ -96,14 +96,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // 1. IP Rate Limiting
+  // 1. IP Rate Limiting (DISABLED FOR DEVELOPMENT)
   const ip = (request as any).ip || request.headers.get('x-forwarded-for') || '127.0.0.1'
-  if (isRateLimited(ip)) {
-    return NextResponse.json(
-      { error: 'TOO_MANY_REQUESTS', message: 'Rate limit exceeded. Max 60 requests per minute.' },
-      { status: 429 }
-    )
-  }
+  // if (isRateLimited(ip)) {
+  //   return NextResponse.json(
+  //     { error: 'TOO_MANY_REQUESTS', message: 'Rate limit exceeded. Max 60 requests per minute.' },
+  //     { status: 429 }
+  //   )
+  // }
 
   // 2. Webhook Signature Validation
   if (pathname === '/api/webhooks/payment' || pathname === '/api/webhooks/midtrans') {

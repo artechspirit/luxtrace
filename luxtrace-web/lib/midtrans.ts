@@ -6,8 +6,7 @@ const clientKey = process.env.MIDTRANS_CLIENT_KEY || "placeholder-client-key";
 const midtransEnv = process.env.MIDTRANS_ENV?.toLowerCase();
 const isProduction =
   midtransEnv === "production" ||
-  (midtransEnv === undefined && process.env.NODE_ENV === "production") ||
-  serverKey.startsWith("Mid-server-");
+  (midtransEnv === undefined && serverKey.startsWith("Mid-server-"));
 
 if (
   (!process.env.MIDTRANS_SERVER_KEY || !process.env.MIDTRANS_CLIENT_KEY) &&
@@ -141,9 +140,9 @@ export async function createSnapInvoice(
     ],
     ...(enabledPayments ? { enabled_payments: enabledPayments } : {}),
     callbacks: {
-      finish: `${process.env.NEXT_PUBLIC_APP_URL}/payment/finish`,
-      unfinish: `${process.env.NEXT_PUBLIC_APP_URL}/payment/unfinish`,
-      error: `${process.env.NEXT_PUBLIC_APP_URL}/payment/error`,
+      finish: `${process.env.NEXT_PUBLIC_APP_URL || 'https://luxtrace-web-76989259968.asia-southeast1.run.app'}/payment/finish`,
+      unfinish: `${process.env.NEXT_PUBLIC_APP_URL || 'https://luxtrace-web-76989259968.asia-southeast1.run.app'}/payment/unfinish`,
+      error: `${process.env.NEXT_PUBLIC_APP_URL || 'https://luxtrace-web-76989259968.asia-southeast1.run.app'}/payment/error`,
     },
   });
 

@@ -14,13 +14,28 @@ export const transactionService = {
   async getById(
     transactionId: string,
   ): Promise<Transaction & { payment_url?: string }> {
-    const tx = await transactionRepository.findById(transactionId);
+    let tx = await transactionRepository.findById(transactionId);
     if (!tx)
       throw Object.assign(new Error("Transaction not found"), {
         code: "NOT_FOUND",
       });
 
-    // If pending and supports payment, generate payment URL dynamically
+    // Auto-sync status with Midtrans to handle missed webhooks (especially on localhost)
+    if (
+      tx.status === "PENDING" &&
+      (tx.type === "P2P_REMOTE_SHIPPING" || tx.type === "PRIMARY_BOUTIQUE")
+    ) {
+      try {
+        await paymentService.syncTransactionStatus(tx.transaction_id);
+        // Re-fetch after sync in case status changed
+        const updatedTx = await transactionRepository.findById(transactionId);
+        if (updatedTx) tx = updatedTx;
+      } catch (err) {
+        console.warn("Failed to sync transaction status:", err);
+      }
+    }
+
+    // If still pending, generate payment URL dynamically
     if (
       tx.status === "PENDING" &&
       (tx.type === "P2P_REMOTE_SHIPPING" || tx.type === "PRIMARY_BOUTIQUE")
@@ -29,7 +44,9 @@ export const transactionService = {
         const buyer = await profileRepository.findByUserId(tx.buyer_id);
         const product = (tx as Transaction & { product?: { brand: string; name: string } }).product;
         if (buyer && product) {
-          const orderId = tx.payment_ref || `LUX-${tx.transaction_id}`;
+          // Generate a fresh order ID (max 50 chars for Midtrans)
+          const shortId = tx.transaction_id.substring(0, 8);
+          const orderId = `LUX-${shortId}-${Date.now()}`;
           const itemName = `${product.brand} — ${product.name}`;
           const snapResult = await createSnapInvoice({
             orderId,
@@ -39,12 +56,18 @@ export const transactionService = {
             itemId: tx.product_id,
             itemName,
           });
+          
+          // Update the payment_ref in DB so the webhook can find it
+          await transactionRepository.setPaymentRef(tx.transaction_id, orderId);
+          
+          const payment_url = snapResult.redirect_url;
           return {
             ...tx,
-            payment_url: snapResult.redirect_url,
+            payment_url,
           };
         }
-      } catch (err) {
+      } catch (err: any) {
+        require('fs').appendFileSync('/tmp/midtrans_error.log', new Date().toISOString() + ' ' + (err.message || err.toString()) + '\n');
         console.error(
           "Failed to dynamically fetch/create Midtrans Snap URL in getById:",
           err,
