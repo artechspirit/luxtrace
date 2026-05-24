@@ -30,7 +30,8 @@ export const transactionService = {
         // Re-fetch after sync in case status changed
         const updatedTx = await transactionRepository.findById(transactionId);
         if (updatedTx) tx = updatedTx;
-      } catch (err) {
+      } catch (err: any) {
+        require('fs').appendFileSync('/tmp/midtrans_sync_error.log', new Date().toISOString() + ' ' + (err.message || err.toString()) + '\n');
         console.warn("Failed to sync transaction status:", err);
       }
     }
@@ -44,9 +45,8 @@ export const transactionService = {
         const buyer = await profileRepository.findByUserId(tx.buyer_id);
         const product = (tx as Transaction & { product?: { brand: string; name: string } }).product;
         if (buyer && product) {
-          // Generate a fresh order ID (max 50 chars for Midtrans)
-          const shortId = tx.transaction_id.substring(0, 8);
-          const orderId = `LUX-${shortId}-${Date.now()}`;
+          // Use the existing payment_ref, or fallback to standard format
+          const orderId = tx.payment_ref || `LUX-${tx.transaction_id.substring(0, 8)}`;
           const itemName = `${product.brand} — ${product.name}`;
           const snapResult = await createSnapInvoice({
             orderId,
@@ -57,8 +57,9 @@ export const transactionService = {
             itemName,
           });
           
-          // Update the payment_ref in DB so the webhook can find it
-          await transactionRepository.setPaymentRef(tx.transaction_id, orderId);
+          if (tx.payment_ref !== orderId) {
+            await transactionRepository.setPaymentRef(tx.transaction_id, orderId);
+          }
           
           const payment_url = snapResult.redirect_url;
           return {
