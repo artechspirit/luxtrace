@@ -19,11 +19,11 @@
 
 **[Screen: Judul animasi "Luxtrace 💎"]**
 
-> *"Setiap tahun, industri barang mewah kehilangan miliaran dolar akibat produk palsu. Pembeli tidak punya cara untuk membuktikan keaslian barang yang mereka beli — terutama di pasar P2P.*
+> *"Bagi kolektor, membeli barang preloved punya risiko besar tertipu barang 'super-fake'. Pembeli di pasar P2P tidak punya cara 100% aman untuk membuktikan keaslian barang.*
 >
 > *Luxtrace hadir sebagai solusi: sistem Digital Twin berbasis NFT + NFC chip fisik yang membuat setiap tas, jam tangan, dan barang mewah memiliki identitas digital yang tidak bisa dipalsukan.*
 >
-> *Dalam 3 menit ini, kami akan menunjukkan bagaimana sistem ini bekerja dari ujung ke ujung."*
+> *Dalam 3 menit ini, mari lihat bagaimana sistem ini bekerja dari ujung ke ujung."*
 
 ---
 
@@ -83,20 +83,17 @@
 
 ---
 
-## ⚡ SEGMEN 3 — Tech Stack & Closing (30 detik)
+## ⚡ SEGMEN 3 — Tech Stack, Vibe Coding & Closing (30 detik)
 
-**[Screen: Diagram arsitektur sistem / slide sederhana]**
+**[Screen: Tampilan IDE bersama Antigravity / Prompt Google AI Studio, disandingkan dengan Arsitektur Luxtrace]**
 
-> *"Luxtrace dibangun dengan stack production-grade:*
-> - **Next.js 16** deployed di **Google Cloud Run**
-> - **React Native + Expo** untuk iOS & Android
-> - **Supabase** untuk database & auth
-> - **Thirdweb Engine** untuk gasless blockchain transactions
-> - **Midtrans** untuk payment gateway
+> *"Membangun ekosistem sekompleks ini (Web, Mobile, Web3) biasanya butuh tim besar dan waktu berbulan-bulan. Rahasia kami? Kami jujur menggunakan metode **Vibe Coding**.*
 >
-> *Semua kode open source, semua sistem live dan bisa dicoba sekarang.*
+> *Dengan bantuan **Google Gemini** dan asisten AI **Antigravity**, kami merancang guardrails yang ketat, dan mereka mengeksekusi penulisan kode dengan sangat presisi. Mulai dari backend NestJS, integrasi NFC di Expo, hingga deployment ke **Google Cloud Run**.*
 >
-> *Luxtrace — karena keaslian adalah segalanya."*
+> *Ini bukan sekadar prototype, ini adalah masa depan software engineering.*
+>
+> *Luxtrace — keaslian tanpa kompromi, didukung oleh AI."*
 
 ---
 

@@ -5,12 +5,20 @@
 - Struktur: `colors`, `typography`, `spacing`, `radii`, `shadows`, `breakpoints`, `zIndex`
 - 🚫 DILARANG hardcode `#hex`/`rgb`/px di komponen. SELALU pakai token via utility class.
 - Sync: Token → `tailwind.config.ts` (Web) & `nativewind.config.ts` (Mobile) via `pnpm run sync:ui-tokens`. Jalankan sebelum commit.
+- Jika `packages/ui` belum ada di repo existing, AI WAJIB membuat audit/migration plan dulu. Jangan membuat package UI baru tanpa approval.
+
+## 1.1 DESIGN SYSTEM BOOTSTRAP PHASE
+- Audit UI existing: warna, typography, spacing, radii, shadow, breakpoint, dan repeated components.
+- Define token awal dari audit, bukan dari selera random.
+- Map token ke Tailwind/Web dan NativeWind/Mobile.
+- Migrasi bertahap: foundation components dulu (`Button`, `Input`, `Card`, `Modal`, `Badge`, `Skeleton`), lalu screens.
+- Setiap migration harus menjaga visual parity kecuali user meminta redesign.
 
 ## 2. COMPONENT ARCHITECTURE
 - Primitives: Unstyled, accessible (`@radix-ui/react-*` Web, `react-native-*` Mobile). No theme coupling.
 - Foundation: Token-aware (`Button`, `Input`, `Card`, `Modal`, `Badge`, `Skeleton`).
 - Exports: Conditional `package.json`: `"web": "./src/web/index.ts"`, `"mobile": "./src/mobile/index.ts"`, `"default": "./src/shared/index.ts"`
-- 🚫 DILARANG: Buat komponen UI baru tanpa cek `packages/ui/` dulu. Extends, jangan fork.
+- 🚫 DILARANG: Buat komponen UI baru tanpa cek `packages/ui/` atau component library existing dulu. Extends, jangan fork.
 
 ## 3. THEME & DARK MODE
 - Web: `next-themes` + `class="dark"`. Default: system preference.
@@ -32,10 +40,10 @@
 ## 🚫 ANTI-PATTERNS
 - Hardcode warna/spacing → GANTI `bg-brand-500`, `m-3`
 - Inline `style={{}}` → GANTI utility class
-- Custom lib tanpa token → REJECT
+- Custom lib tanpa token → REJECT atau minta approval jika masih fase bootstrap
 - Skip focus/keyboard → ADD `focus-visible` & `:active`
 - Mobile hover → GANTI `active:` / `pressOpacity`
-- Import UI dari apps → GANTI `@repo/ui`
+- Import UI dari apps → GANTI `@repo/ui` setelah monorepo package tersedia
 
 ## ✅ CHECKLIST
 - [ ] Warna/spacing/radius pakai token
@@ -45,3 +53,4 @@
 - [ ] Responsive via breakpoint utilities
 - [ ] Imported `@repo/ui`, bukan buat baru
 - [ ] `sync:ui-tokens` clean diff
+- [ ] Jika `packages/ui` belum ada, migration plan disetujui dulu

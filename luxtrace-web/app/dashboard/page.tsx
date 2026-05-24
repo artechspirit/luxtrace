@@ -1154,21 +1154,33 @@ export default function Dashboard() {
           } lg:translate-x-0 lg:w-64 lg:bg-black/40 lg:backdrop-blur-md`}
       >
         <div>
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-10 px-2">
-            <div className="w-8 h-8 rounded bg-gradient-to-tr from-[#0F2A25] to-[#00FFB2] flex items-center justify-center border border-[#00FFB2]/20 shadow-[0_0_15px_rgba(0,255,178,0.25)]">
-              <span className="text-black font-dm font-bold text-sm tracking-wider">
-                L
-              </span>
+          {/* Logo & Close */}
+          <div className="flex items-center justify-between mb-10 px-2">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded bg-gradient-to-tr from-[#0F2A25] to-[#00FFB2] flex items-center justify-center border border-[#00FFB2]/20 shadow-[0_0_15px_rgba(0,255,178,0.25)]">
+                <span className="text-black font-dm font-bold text-sm tracking-wider">
+                  L
+                </span>
+              </div>
+              <div>
+                <span className="text-white font-dm font-bold tracking-widest text-lg block leading-none">
+                  LUXTRACE
+                </span>
+                <span className="text-[10px] text-[#00FFB2] uppercase tracking-[0.2em] font-mono leading-none">
+                  PROVENANCE v1.0
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="text-white font-dm font-bold tracking-widest text-lg block">
-                LUXTRACE
-              </span>
-              <span className="text-[10px] text-[#00FFB2] uppercase tracking-[0.2em] font-mono leading-none">
-                PROVENANCE v1.0
-              </span>
-            </div>
+
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors border border-transparent hover:border-white/10"
+              aria-label="Close sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           {/* Navigation */}
@@ -1359,16 +1371,25 @@ export default function Dashboard() {
 
       {/* ─── MAIN CONTENT ──────────────────────────────────────────────────────── */}
       <main className="flex-1 lg:ml-64 overflow-y-auto px-4 md:px-6 lg:px-10 py-6 md:py-8 space-y-8">
-        <div className="lg:hidden flex items-center mb-4 border-b border-white/10 pb-4 px-2">
+        {/* ─── MOBILE HEADER ─── */}
+        <div className="lg:hidden sticky top-0 z-20 flex items-center justify-between border-b border-white/5 bg-[#0A0A0A]/80 backdrop-blur-xl -mx-4 md:-mx-6 -mt-6 md:-mt-8 px-4 md:px-6 py-4 mb-6 shadow-xl shadow-black/50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded bg-gradient-to-tr from-[#0F2A25] to-[#00FFB2] flex items-center justify-center border border-[#00FFB2]/20 shadow-[0_0_10px_rgba(0,255,178,0.2)]">
+              <span className="text-black font-dm font-bold text-sm tracking-wider">L</span>
+            </div>
+            <span className="text-white font-dm font-bold tracking-widest text-lg">LUXTRACE</span>
+          </div>
+
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-black/70 text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[#00FFB2]/50 transition"
+            className="group relative inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-white hover:bg-[#00FFB2]/10 hover:border-[#00FFB2]/30 hover:text-[#00FFB2] focus:outline-none transition-all overflow-hidden"
             aria-label="Open sidebar menu"
           >
-            <span className="sr-only">Open menu</span>
-            <span className="block h-0.5 w-6 rounded-full bg-white"></span>
-            <span className="block h-0.5 w-6 rounded-full bg-white mt-1"></span>
-            <span className="block h-0.5 w-6 rounded-full bg-white mt-1"></span>
+            <div className="flex flex-col items-end justify-center gap-[4px] w-5">
+              <span className="block h-[2px] w-5 rounded-full bg-current transition-all duration-300 group-hover:w-5"></span>
+              <span className="block h-[2px] w-4 rounded-full bg-current transition-all duration-300 group-hover:w-5"></span>
+              <span className="block h-[2px] w-3 rounded-full bg-current transition-all duration-300 group-hover:w-5"></span>
+            </div>
           </button>
         </div>
         {/* Header */}
@@ -3389,9 +3410,9 @@ export default function Dashboard() {
                 </div>
 
                 <a
-                  href="/downloads/luxtrace-app.apk"
+                  href="https://drive.google.com/file/d/1ugQqXRRSh0Smt0eA8CQtJc-wX-9ooY4e/view?usp=sharing"
                   className="w-full inline-flex items-center justify-center gap-2 bg-[#00FFB2] text-black font-dm font-bold uppercase tracking-widest text-xs py-4 px-6 rounded-xl hover:bg-[#00cc8e] transition-colors shadow-lg shadow-[#00FFB2]/20"
-                  download
+                  target="_blank"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
