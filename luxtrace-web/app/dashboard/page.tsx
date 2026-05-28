@@ -3410,7 +3410,7 @@ export default function Dashboard() {
                 </div>
 
                 <a
-                  href="https://drive.google.com/file/d/1ugQqXRRSh0Smt0eA8CQtJc-wX-9ooY4e/view?usp=sharing"
+                  href="https://drive.google.com/file/d/14U7IZ7Pr4LYY8DHM7ffUpv19k1gxlwLD/view?usp=sharing"
                   className="w-full inline-flex items-center justify-center gap-2 bg-[#00FFB2] text-black font-dm font-bold uppercase tracking-widest text-xs py-4 px-6 rounded-xl hover:bg-[#00cc8e] transition-colors shadow-lg shadow-[#00FFB2]/20"
                   target="_blank"
                 >
