@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: ./luxtrace-web
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_APP_URL=http://localhost:3000
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./luxtrace-web/.env
+    restart: always
