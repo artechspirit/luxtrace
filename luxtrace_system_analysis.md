@@ -1,422 +1,249 @@
 # Luxtrace — System Architecture Analysis
 > Mode: Strict Production Engineering  
-> Sumber: blueprint.md · backend.md · frontend.md · design-system.md  
-> Tanggal: 2026-05-19
+> Date: 2026-06-10
 
 ---
 
 ## 1. Product State Machine (Detail)
 
-### State yang Valid
-
+### Valid States
 ```
 MANUFACTURED → REGISTERED → OWNED ⇄ IN_TRANSIT
 ```
 
 | State | Meaning | Trigger | Guard |
 |---|---|---|---|
-| `MANUFACTURED` | Produk baru dibuat, belum terdaftar di chain | CSV upload + DB insert | Hanya admin/brand |
-| `REGISTERED` | NFT di-mint, NFC di-bind ke produk | Blockchain tx confirmed + NFC hash saved | NFT tx_hash harus ada, nfc_uid harus unik |
-| `OWNED` | Produk dimiliki buyer, NFT ada di wallet mereka | Primary sale PAID atau P2P complete | NFT transfer harus confirmed on-chain |
-| `IN_TRANSIT` | Produk dalam proses P2P Remote Shipping | Escrow dikunci, buyer sudah bayar | Produk harus di state `OWNED`, bukan `MANUFACTURED` |
+| `MANUFACTURED` | New product created, not yet bound to a physical tag or owner. | CSV upload + DB insert | Only admin/operator |
+| `REGISTERED` | NFT minted, NFC placeholder or physical tag bound to product. | Blockchain mint tx confirmed + initial tag saved | Mint transaction hash must exist, serial must be unique |
+| `OWNED` | Product is owned by a consumer; digital twin NFT is in their derived wallet. | Primary sale PAID or P2P verification completed | NFT transfer confirmed on-chain |
+| `IN_TRANSIT` | Product is in the P2P Remote Shipping flow. | Escrow funded and transaction marked as shipped | Product must be in `OWNED` state previously, not `MANUFACTURED` |
 
-### Aturan Transisi (Immutable Rules)
-
+### Transition Rules (Immutable)
 ```
-MANUFACTURED  ──(NFT mint + NFC bind)──▶  REGISTERED
-REGISTERED    ──(primary sale paid)──────▶  OWNED
-OWNED         ──(P2P remote initiated)───▶  IN_TRANSIT
-IN_TRANSIT    ──(NFC verified + escrow release)──▶  OWNED      [sukses]
-IN_TRANSIT    ──(fraud detected / timeout)──────▶  OWNED       [rollback ke seller]
+MANUFACTURED  ──(NFT mint + placeholder bind)──▶  REGISTERED
+REGISTERED    ──(NFC physical activate)─────────▶  REGISTERED (nfc_bound=true)
+REGISTERED    ──(boutique sale / payment paid)──▶  OWNED
+OWNED         ──(P2P remote initiated & paid)───▶  OWNED
+OWNED         ──(marked as shipped)─────────────▶  IN_TRANSIT
+IN_TRANSIT    ──(NFC verified + escrow release)──▶  OWNED      [success]
+IN_TRANSIT    ──(fraud detected / retry reset)──▶  IN_TRANSIT [retry allowed]
+IN_TRANSIT    ──(NFT transfer fail / rollback)──▶  OWNED      [rollback to seller]
+OWNED         ──(P2P direct verified)───────────▶  OWNED      [buyer wallet]
 ```
 
 > [!IMPORTANT]
-> - **Hanya backend** yang boleh melakukan perubahan state.
-> - State `IN_TRANSIT` adalah **LOCKED**: tidak bisa di-transfer ulang, tidak bisa dibatalkan secara sepihak.
-> - Tidak ada transisi mundur dari `OWNED` ke `REGISTERED` atau `MANUFACTURED`.
-> - Setiap transisi **wajib** menghasilkan satu record baru di `product_logs`.
-
-### State × Transaksi Matrix
-
-| State Awal | Transaksi Type | State Akhir |
-|---|---|---|
-| `REGISTERED` | `PRIMARY_BOUTIQUE` (sukses) | `OWNED` |
-| `OWNED` | `P2P_REMOTE_SHIPPING` (initiated) | `IN_TRANSIT` |
-| `IN_TRANSIT` | NFC verified → escrow released | `OWNED` (buyer) |
-| `IN_TRANSIT` | Fraud / timeout | `OWNED` (seller, rollback) |
-| `OWNED` | `P2P_DIRECT_HANDOVER` (verified) | `OWNED` (buyer baru) |
+> - **Only the backend** can execute state changes.
+> - The `IN_TRANSIT` status is **LOCKED**: the item cannot be listed for another sale or transferred while in transit.
+> - Every status transition **must** record a new entry in `product_logs`.
 
 ---
 
-## 2. Flow Backend (Detail)
+## 2. Backend Service Flow (Detail)
 
 ### 2.1 Manufacturing Flow
-
 ```
 [Admin Web]
     │
     ▼
-POST /api/products/batch (CSV upload)
+POST /api/products/upload (CSV upload)
     │
     ▼
-[product.service] → validateCSVSchema()
+[product.service] → parseCsvBuffer()
     │   ── duplicate serial check via product.repository
     ▼
 INSERT products (status=MANUFACTURED) [atomic batch]
     │
     ▼
-[blockchain.service] → thirdweb.batchMintNFT(brandWallet, serialNumbers[])
-    │   ── via Thirdweb Engine (gasless relayer)
-    │   ── pollingInterval: ~15 detik (Sepolia finality)
+[blockchain.service] → mintNFT()
+    │   ── via Thirdweb TypeScript SDK v5 (using Brand account signer)
+    │   ── polling for tx receipt: wait for receipt (~15 seconds finality)
     ▼
 ON TX_CONFIRMED:
     │
-    ├─▶ UPDATE products SET nft_token_id = [...] WHERE serial_number IN [...]
+    ├─▶ UPDATE products SET nft_token_id = tokenId, status='REGISTERED' WHERE product_id = X
     │
     ▼
-[nfc.service] → generateNFCBinding(serial_number)
-    │   ── generate uid (UUID v4 or hardware-synced)
-    │   ── hash = SHA256(uid + SALT)  [SALT dari ENV: NFC_SECRET_SALT]
+[nfc.service] → generateNFCBinding()
+    │   ── generates temporary UID (UUID v4)
+    │   ── hash = SHA256(UID + SALT) [SALT from ENV: NFC_SECRET_SALT]
     │   ── INSERT nfc_tags (nfc_uid, secure_key_hash, product_id)
     │
     ▼
-UPDATE products SET status='REGISTERED'
-INSERT product_logs (event='REGISTERED', product_id, metadata)
-
+INSERT product_logs (event='MANUFACTURED' + 'REGISTERED')
 ```
-
-**Service chain:** `product.service` → `blockchain.service` → `nfc.service` → `product.repository`
 
 ---
 
 ### 2.2 Primary Sale (Boutique)
-
 ```
-[Mobile / Web Buyer]
+[Boutique Operator Mobile]
     │
     ▼
-POST /api/transactions/primary (product_id, buyer_user_id)
+POST /api/boutique/initiate-sale { product_id, buyer_email, sale_mode }
     │
     ▼
 [transaction.service]
-    ├─▶ LOCK product (verify status = REGISTERED, no active tx)
-    ├─▶ [payment.service] → midtrans.createInvoice(amount, order_id)
-    │       └─ returns payment_url + order_id
-    ▼
-INSERT transactions (type=PRIMARY_BOUTIQUE, status=PENDING, payment_ref=order_id)
+    ├─▶ Resolve buyer from profile.repository.findByEmail()
+    ├─▶ Verify product status = REGISTERED
     │
-    ▼
-User bayar via QRIS / Virtual Account
+    ├─▶ IF sale_mode === 'escrow':
+    │       └─ [payment.service] → createSnapInvoice(gross_amount, order_id)
+    │       └─ INSERT transactions (type=PRIMARY_BOUTIQUE, status=PENDING, payment_ref=order_id)
+    │       └─ Send push notification to buyer with Snap payment_url
     │
-    ▼
-POST /api/webhooks/midtrans  ← Midtrans async callback
+    ├─▶ IF sale_mode === 'direct':
+    │       └─ INSERT transactions (type=PRIMARY_BOUTIQUE, status=PENDING)
+    │       └─ [nfc.service] → generateQrPayload(transaction_id, product_id)
+    │       └─ Return session_id + qr_payload (operator shows QR to buyer)
+```
+
+#### Webhook Settlement (Async Callback)
+```
+POST /api/webhooks/midtrans  ← Midtrans async notification
     │
     ▼
 [payment.service]
-    ├─▶ validateSignature(payload, MIDTRANS_SERVER_KEY)  [wajib, reject jika gagal]
-    ├─▶ checkIdempotency(order_id)  [jika sudah diproses → return 200 tanpa re-process]
+    ├─▶ validateMidtransSignature(payload, MIDTRANS_SERVER_KEY) [reject if invalid]
+    ├─▶ checkIdempotency(order_id) [if status is already PAID/COMPLETED -> return 200]
     │
     ▼
-IF payment_status = 'settlement':
+IF payment_status = 'settlement' / 'capture':
     │
     ├─▶ UPDATE transactions SET status='PAID'
     │
-    ├─▶ [blockchain.service] → thirdweb.transferNFT(brandWallet → buyerWallet, tokenId)
-    │       └─ simpan tx_hash ke transactions.blockchain_tx_hash
+    ├─▶ [blockchain.service] → transferNFTFromBrand(buyerWalletAddress, tokenId)
+    │       └─ signs on-chain transaction via Brand Account
     │
     ├─▶ UPDATE products SET status='OWNED', current_owner_id=buyer_user_id
-    │
-    └─▶ INSERT product_logs (event='BRAND_OUTLET', from=brand, to=buyer)
-
+    ├─▶ UPDATE transactions SET status='COMPLETED', blockchain_tx_hash=txHash
+    └─▶ INSERT product_logs (event='BRAND_OUTLET', actor_role='CONSUMER')
 ```
-
-**Critical:** Webhook harus idempotent. Jika `order_id` sudah ada di DB dengan status PAID → skip, return 200.
 
 ---
 
 ### 2.3 P2P Remote Shipping (Escrow)
-
 ```
-PHASE 1 — BUYER COMMIT
-──────────────────────
-[Buyer Mobile]
+PHASE 1 — SELLER LISTS & BUYER FUNDS
+────────────────────────────────────
+[Seller Mobile]
     │
     ▼
-POST /api/transactions/p2p-remote (product_id, seller_id, buyer_id, price)
+POST /api/p2p/remote/init { product_id, buyer_id, agreed_price_idr }
     │
     ▼
 [transaction.service]
-    ├─▶ Verify product status = OWNED, owner = seller
-    ├─▶ LOCK product (set in-progress flag)
-    ├─▶ [payment.service] → midtrans.createEscrowInvoice(amount, order_id)
+    ├─▶ Verify caller is product owner & status is OWNED
+    ├─▶ [payment.service] → createSnapInvoice(agreedPrice, order_id)
+    ├─▶ INSERT transactions (type=P2P_REMOTE_SHIPPING, status=PENDING, payment_ref=order_id)
     ▼
-INSERT transactions (type=P2P_REMOTE_SHIPPING, status=PENDING)
+Buyer pays via Snap → Webhook received
     │
     ▼
-Buyer bayar → Webhook midtrans diterima
-    │
-    ▼
-[payment.service] → validateSignature()
-    │
+[payment.service]
     ├─▶ UPDATE transactions SET status='PAID'
-    └─▶ UPDATE products SET status='IN_TRANSIT'  ← LOCKED
+    └─▶ Send push notification to Seller: "Escrow funded, ship product"
 
 
-PHASE 2 — SELLER PREPARE HANDOVER
-───────────────────────────────────
+PHASE 2 — SELLER SHIPS & GENERATES QR
+──────────────────────────────────────
 [Seller Mobile]
     │
-    ▼
-GET /api/transactions/:id/qr-payload
+    ├─▶ POST /api/transactions/:id/ship  ──▶ Sets transaction & product status to IN_TRANSIT
     │
+    ├─▶ GET /api/p2p/remote/:transaction_id/qr
+    │       └─ [nfc.service] → generateQrPayload()
+    │       └─ INSERT qr_sessions (session_id, transaction_id, encrypted_payload, expires_at)
+    │       └─ Return qr_payload (encrypted) + session_id
     ▼
-[transaction.service]
-    ├─▶ Verify caller = seller (RLS check)
-    ├─▶ Fetch: transaction_id, product_id, nfc_uid (dari nfc_tags)
-    └─▶ Encrypt payload (AES-256, key dari ENV: QR_ENCRYPTION_KEY)
-    │
-    ▼
-Return: encrypted_qr_string  → Seller tampilkan sebagai QR code
+Seller displays QR code
 
 
-PHASE 3 — BUYER VERIFY
-───────────────────────
+PHASE 3 — BUYER SCANS & VERIFIES NFC
+────────────────────────────────────
 [Buyer Mobile]
     │
     ▼
-1. Scan QR → decrypt payload → dapat transaction_id + product_id + expected_nfc_uid
-2. Tap NFC pada fisik produk → dapat raw_nfc_uid dari chip
+1. Scan QR → decrypt QR payload → extracts session_id + product_id
+2. Scan physical product NFC tag → reads raw nfc_uid
+3. POST /api/p2p/verify { session_id, scanned_uid, mode: 'remote' }
     │
     ▼
-POST /api/transactions/:id/verify-nfc
-    Body: { scanned_uid: raw_nfc_uid }
-    │
-    ▼
-[nfc.service]
+[transaction.service]
+    ├─▶ Load and validate QR session (must not be expired or used)
+    ├─▶ Guard: transaction is IN_TRANSIT & caller is the buyer
+    ├─▶ Atomic: mark session as USED (prevents replay attacks)
     ├─▶ Hash scanned_uid: SHA256(scanned_uid + NFC_SECRET_SALT)
-    ├─▶ Bandingkan dengan nfc_tags.secure_key_hash WHERE product_id = X
+    ├─▶ Compare with nfc_tags.secure_key_hash WHERE product_id = X
     │
-    IF MATCH:
+    ├─── IF MATCH:
+    │       ├─▶ [blockchain.service] → transferNFTBetweenUsers(sellerWallet → buyerWallet, tokenId)
+    │       │       └─ derives private keys deterministically using WALLET_MASTER_SEED
+    │       │       └─ checks gas balance; auto-funds seller wallet with 0.002 ETH if needed
+    │       ├─▶ UPDATE products SET status='OWNED', current_owner_id=buyer_id
+    │       ├─▶ UPDATE transactions SET status='COMPLETED', blockchain_tx_hash=txHash
+    │       ├─▶ INSERT product_logs (event='TRANSFERRED')
+    │       └─▶ Release escrow payout (simulated/manual release)
     │
-    ├─▶ [payment.service] → midtrans.releaseEscrow(order_id)
-    ├─▶ [blockchain.service] → thirdweb.transferNFT(sellerWallet → buyerWallet, tokenId)
-    │       └─ simpan tx_hash
-    ├─▶ UPDATE products SET status='OWNED', current_owner_id=buyer_id
-    ├─▶ UPDATE transactions SET status='COMPLETED'
-    └─▶ INSERT product_logs (event='TRANSFERRED', from=seller, to=buyer)
-    │
-    IF NO MATCH:
-    │
-    ├─▶ UPDATE transactions SET status='FRAUD_FLAGGED'
-    ├─▶ INSERT product_logs (event='FRAUD_ATTEMPT', metadata={scanned_uid})
-    └─▶ Return 400 { error: { code: 'NFC_MISMATCH', message: '...' } }
-
+    └─── IF MISMATCH:
+            ├─▶ Reset QR session used flag (allow retry)
+            ├─▶ INSERT product_logs (event='FRAUD_ATTEMPT')
+            └─▶ Return 400 { error: { code: 'NFC_MISMATCH' } }
 ```
 
 ---
 
-### 2.4 P2P Direct Handover
+## 3. Cryptographic Proximity & Replay Protection
 
-```
-PHASE 1 — SELLER CREATE SESSION
-─────────────────────────────────
-[Seller Mobile]
-    │
-    ▼
-POST /api/transactions/p2p-direct (product_id, buyer_id, price?)
-    │
-    ▼
-[transaction.service]
-    ├─▶ Verify product status = OWNED, owner = seller
-    ├─▶ INSERT transactions (type=P2P_DIRECT_HANDOVER, status=PENDING)
-    └─▶ Generate session token (short-lived, TTL: 5 menit)
-    │
-    ▼
-[nfc.service]
-    ├─▶ Fetch nfc_uid WHERE product_id = X
-    └─▶ Encrypt: AES-256(transaction_id + nfc_uid, key=QR_ENCRYPTION_KEY)
-    │
-    ▼
-Return: encrypted_qr_string  → Seller tampilkan QR
+### QR Code Session Security
+Unlike simple static QR verification, Luxtrace enforces a session-gated flow to prevent replay attacks (i.e. copying a QR code and scanning it later without the physical item).
 
-
-PHASE 2 — BUYER SCAN + NFC PROXIMITY VERIFY
-─────────────────────────────────────────────
-[Buyer Mobile]
-    │
-    ▼
-1. Scan QR → decrypt → dapat expected_nfc_uid + transaction_id
-2. Tap NFC fisik → dapat raw_nfc_uid
-    │
-    ▼
-POST /api/transactions/:id/direct-verify
-    Body: { scanned_uid: raw_nfc_uid }
-    │
-    ▼
-[nfc.service] → hash + compare (sama dengan Remote Shipping)
-    │
-    IF VALID:
-    │
-    ├─▶ [blockchain.service] → thirdweb.transferNFT(sellerWallet → buyerWallet, tokenId)
-    ├─▶ UPDATE products SET status='OWNED', current_owner_id=buyer_id
-    ├─▶ UPDATE transactions SET status='COMPLETED'
-    └─▶ INSERT product_logs (event='TRANSFERRED', via='DIRECT_HANDOVER')
-
-```
-
-> [!NOTE]
-> P2P Direct **tidak menggunakan escrow/payment gateway**. Transfer terjadi pure berdasarkan NFC proximity verification. Cocok untuk transaksi tunai fisik antara dua pihak.
+1. **Generation:** When requested, the server creates a row in the `qr_sessions` table with a UUID `session_id`, encrypts the payload using AES-256 (`QR_ENCRYPTION_KEY`), and returns it.
+2. **Consumption:** When the buyer hits `/api/p2p/verify`, the backend updates `qr_sessions.is_used = true` **before** performing on-chain calls. This prevents parallel execution replay attempts.
+3. **Mismatches:** If the physical NFC UID does not match, the session is reset so the buyer can attempt the scan again without forcing the seller to generate a new QR.
 
 ---
 
-## 3. Critical System Deep Dive
+## 4. Blockchain Integration Architecture (TypeScript SDK)
 
-### 3.1 Escrow System
+Luxtrace implements a direct integration model using the **Thirdweb TypeScript SDK v5** instead of a self-hosted engine server.
 
-```
-Escrow di Luxtrace = Midtrans payment hold (bukan smart contract escrow)
-```
-
-| Komponen | Detail |
-|---|---|
-| **Provider** | Midtrans (ENV: `MIDTRANS_SERVER_KEY`) |
-| **Trigger lock** | Saat buyer bayar & webhook `settlement` diterima |
-| **Trigger release** | Saat NFC verification sukses |
-| **Trigger refund** | Fraud detected / timeout (manual atau otomatis) |
-| **Idempotency key** | `order_id` = `transaction_id` dari DB |
-| **Timeout policy** | Harus didefinisikan (rekomendasi: 24-48 jam) |
-
-**Invariant:** Escrow tidak pernah di-release sebelum NFC match confirmed server-side. Client tidak bisa trigger release langsung.
-
-**Failure scenario:**
-- NFT transfer berhasil tapi escrow release gagal → **inconsistent state** (lihat Risk section)
-- Escrow released tapi NFT transfer gagal → buyer bayar tapi tidak dapat NFT
+### Custodial Wallet Model
+1. **No RPC key leakage:** Clients do not write directly to the blockchain. All signing is executed server-side.
+2. **Deterministic Seed Derivation:** When a user registers, their private key is derived deterministically from `WALLET_MASTER_SEED` + `userId` using HMAC-SHA256:
+   ```typescript
+   privateKey = HMAC_SHA256(WALLET_MASTER_SEED, userId)
+   ```
+   Only the public `wallet_address` is stored in the database (`profiles` table). The private key is regenerated on-the-fly in memory when executing transfers on behalf of the user.
+3. **Gas Sponsorship:** Since P2P transfers are signed by the seller's derived account, the backend checks the seller's wallet balance before transferring. If it is below `0.001 ETH`, the backend sponsors gas by sending `0.002 ETH` from the Brand wallet.
 
 ---
 
-### 3.2 NFT Transfer System
+## 5. Security & Risk Mitigations
 
-```
-Provider: Thirdweb Engine (gasless via relayer)
-Network: Sepolia (testnet) / Ethereum Mainnet (production)
-Finality: ±12–15 detik
-```
-
-| Step | Action | Constraint |
+| Risk | Description | Mitigation |
 |---|---|---|
-| **Mint** | `batchMintNFT(brandWallet, metadata[])` | Dilakukan saat Manufacturing |
-| **Transfer Primary** | `transferNFT(brandWallet → buyerWallet, tokenId)` | Hanya setelah payment `settlement` |
-| **Transfer P2P** | `transferNFT(sellerWallet → buyerWallet, tokenId)` | Hanya setelah NFC verified |
-
-**Rules:**
-- Semua operasi via Thirdweb Engine — tidak ada direct RPC call dari client.
-- Simpan `tx_hash` ke `transactions.blockchain_tx_hash` sebelum return response.
-- UI wajib menampilkan loader 12–15 detik (Sepolia finality constraint).
-- Retry logic: jika tx gagal (gas spike, nonce issue) → backend retry max 3x dengan exponential backoff.
-
-**Wallet model:**
-- Brand wallet: 1 wallet per brand, custodial di Thirdweb.
-- User wallet: 1 wallet per user, di-generate otomatis saat register (Thirdweb In-App Wallet).
-- Wallet address disimpan di `profiles.wallet_address`.
+| **NFC Cloning** | Attacker clones physical tag UID | The backend hashes raw scanned UIDs with a secret pepper (`NFC_SECRET_SALT`). Plaintext hashes or raw UIDs are never exposed to clients. |
+| **Replay Attack** | Re-using a captured QR payload | QR sessions are marked as `is_used` in the database dynamically during the verification pipeline. |
+| **Payment Webhook Spoofing** | Attacker simulates paid status | Midtrans signature verification is validated on every webhook using timing-safe comparisons (`crypto.timingSafeEqual`). |
+| **Double NFT Transfer** | Concurrent webhook calls | Transaction and order status checks enforce idempotency. If `status === 'PAID'` already, the request is returned with `200` immediately. |
 
 ---
 
-### 3.3 NFC Validation System
+## 6. Required Environment Variables
 
-```
-NFC = physical proxy untuk verifikasi kepemilikan produk
-```
+The backend requires the following configuration variables:
 
-**Bind Flow (Manufacturing time):**
-```
-1. generate uid (UUID v4 atau hardware-sync)
-2. hash = SHA256(uid + NFC_SECRET_SALT)
-3. INSERT nfc_tags { nfc_uid, secure_key_hash, product_id }
-```
-
-**Verify Flow (Transaction time):**
-```
-1. Client scan NFC → kirim raw_uid ke backend
-2. Backend: hash = SHA256(raw_uid + NFC_SECRET_SALT)
-3. SELECT * FROM nfc_tags WHERE product_id = X AND secure_key_hash = hash
-4. IF found → valid
-5. IF not found → fraud attempt
-```
-
-**Security rules:**
-- `nfc_uid` **tidak pernah** dikirim ke client dalam response.
-- Client hanya kirim `scanned_uid` ke backend.
-- `NFC_SECRET_SALT` adalah ENV variable, tidak boleh hardcode.
-- Tidak ada endpoint yang expose `secure_key_hash`.
-- QR payload yang berisi `expected_nfc_uid` harus di-encrypt (AES-256).
-
----
-
-## 4. Risk & Failure Points
-
-### 🔴 CRITICAL — Data Inconsistency
-
-| # | Skenario | Impact | Mitigasi |
-|---|---|---|---|
-| R1 | NFT transfer sukses tapi DB update gagal | Owner di chain ≠ owner di DB | Idempotent retry + blockchain event listener sebagai ground truth |
-| R2 | Escrow released tapi NFT transfer gagal | Buyer bayar, tidak dapat NFT | Rollback escrow via Midtrans Refund API + alert admin |
-| R3 | Webhook Midtrans diterima duplikat | Double NFT transfer | Idempotency check by `order_id` sebelum setiap proses |
-| R4 | State machine bypass dari client | Fraud ownership transfer | Zero-trust: semua validasi state di service layer, bukan route |
-
-### 🟠 HIGH — Transaction Integrity
-
-| # | Skenario | Impact | Mitigasi |
-|---|---|---|---|
-| R5 | Product tidak di-LOCK sebelum payment | Race condition: 2 buyer bayar 1 produk | Status locking + atomic DB update (`WHERE status='REGISTERED'`) |
-| R6 | NFC chip cloned / spoofed | Counterfeit claim | Secure key hash + salt; raw UID tidak pernah expose ke client |
-| R7 | QR payload dari session expired dipakai | Replay attack | Session TTL (5 menit) + invalidasi setelah digunakan 1x |
-| R8 | Thirdweb Engine downtime | NFT transfer gagal semua | Retry queue + manual recovery tool di admin dashboard |
-
-### 🟡 MEDIUM — System Reliability
-
-| # | Skenario | Impact | Mitigasi |
-|---|---|---|---|
-| R9 | Sepolia network congestion | Tx finality > 15 detik | UI loader flexible + timeout notification |
-| R10 | Midtrans webhook tidak terdelivery | Payment stuck di PENDING | Polling fallback: cek Midtrans API per 5 menit untuk PENDING tx |
-| R11 | Batch mint CSV corrupt / duplikat | Produk ganda atau gagal mint | CSV schema validation + duplicate serial check sebelum insert |
-| R12 | Rate limit hit | API down untuk user | Rate limiter per IP + per user_id; exponential backoff di client |
-
-### 🟢 LOW — Operational
-
-| # | Skenario | Impact | Mitigasi |
-|---|---|---|---|
-| R13 | `NFC_SECRET_SALT` leaked | Semua hash bisa dicompute | Rotate salt + re-hash semua nfc_tags (migration script) |
-| R14 | Admin CSV upload salah data | Data produk salah di chain | Preview + confirmation step sebelum batch mint |
-| R15 | product_logs tidak sync | Provenance incomplete | Log setiap state change, bukan hanya final state |
-
----
-
-## 5. Summary: Backend Service Responsibility Map
-
-```
-auth.service        → register, login, wallet generation
-product.service     → MANUFACTURED, REGISTERED state management
-transaction.service → orchestrate all payment + P2P flows
-nfc.service         → bind, hash, verify NFC chips
-blockchain.service  → mint NFT, transfer NFT via Thirdweb Engine
-payment.service     → create invoice, validate webhook, escrow
-```
-
-**Pattern wajib:** Route → Service → Repository → Database  
-**Dilarang:** Business logic di route/controller, query langsung di route.
-
----
-
-## 6. ENV Variables Required
-
-| Variable | Used By | Keterangan |
-|---|---|---|
-| `SUPABASE_URL` | Semua repository | DB connection |
-| `SUPABASE_KEY` | Semua repository | Service role key (server only) |
-| `THIRDWEB_SECRET` | blockchain.service | Engine API auth |
-| `MIDTRANS_SERVER_KEY` | payment.service | Invoice + escrow + refund |
-| `NFC_SECRET_SALT` | nfc.service | Hash seed, rahasia mutlak |
-| `QR_ENCRYPTION_KEY` | nfc.service, transaction.service | AES-256 key untuk QR payload |
-| `THIRDWEB_ENGINE_URL` | blockchain.service | Self-hosted Engine URL |
-| `BRAND_WALLET_ADDRESS` | blockchain.service | Default minter wallet |
-
+* `SUPABASE_URL`: URL of the database instance.
+* `SUPABASE_SERVICE_KEY`: Service role secret key (bypasses RLS).
+* `SUPABASE_ANON_KEY`: Public anonymous access key.
+* `MIDTRANS_SERVER_KEY`: Server secret key for Snap invoicing and signature generation.
+* `MIDTRANS_CLIENT_KEY`: Client token key.
+* `MIDTRANS_ENV`: Environment target (`sandbox` \| `production`).
+* `NEXT_PUBLIC_APP_URL`: Domain host URL for callback redirects.
+* `THIRDWEB_SECRET_KEY`: Secret key for SDK v5 API calls.
+* `BRAND_WALLET_PRIVATE_KEY`: Private signing key for the Brand authority wallet.
+* `BRAND_WALLET_ADDRESS`: Public address of the Brand wallet.
+* `NFT_CONTRACT_ADDRESS`: Deployed ERC-721 smart contract address.
+* `WALLET_MASTER_SEED`: Cryptographic master key for deterministic user wallet derivation.
+* `NFC_SECRET_SALT`: Cryptographic salt for secure NFC UID hashing.
+* `QR_ENCRYPTION_KEY`: Cryptographic key for QR code payload encryption.
